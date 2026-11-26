@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: skulify
+  datasource:
+    url: jdbc:h2:mem:school_wallet;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
+    username: sa
+    password: password
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: false
+  # Disable Spring Security auto-configuration
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.SecurityFilterAutoConfiguration
+  # Serve React app at root
+  mvc:
+    static-path-pattern: /**
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+server:
+  port: 8085
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+app:
+  documents:
+    dir: ./uploads/documents
+  jwt:
+    secret: dev-only-secret-please-change-me-32-bytes-minimum
+    issuer: school-wallet
+    access-token-minutes: 15
+    refresh-token-days: 30
+  security:
+    data-encryption-key:
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+  bootstrap:
+    enabled: true
+    super-admin-username: superadmin
+    super-admin-phone: +255700000000
+    super-admin-password: ChangeMe123!
+    super-admin-full-name: KADE Super Admin
+  auth:
+    password-reset-expose-token: false
+    password-reset-minutes: 30
+  automation:
+    enabled: false
+    fee-reminder-cron: '0 0 6 * * *'
+    library-expiry-cron: '0 5 6 * * *'
+    reorder-cron: '0 10 6 * * *'
+    result-publish-cron: '0 15 6 * * *'
+    duty-reminder-cron: '0 20 6 * * *'
+    daily-cron: '0 25 6 * * *'
+    notification-dispatch-ms: 900000

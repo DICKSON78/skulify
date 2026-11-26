@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gradle
+build
+BOOT-INF
+backups
+**/node_modules
+**/dist
+**/.vite
+**/.gradle
+**/build
+**/.DS_Store
+*.log
+*.sql.gz

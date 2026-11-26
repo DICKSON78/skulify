@@ -1,0 +1,6 @@
+import ResourcePage from '../components/ResourcePage';
+import { RESOURCE_CONFIGS } from '../config/resources';
+
+export default function Reports() {
+    return <ResourcePage config={RESOURCE_CONFIGS.reports} />;
+}

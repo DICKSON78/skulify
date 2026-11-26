@@ -1,0 +1,55 @@
+{
+  "id": "/",
+  "name": "Skulify",
+  "short_name": "Skulify",
+  "description": "School management, fees, attendance and academics in one place.",
+  "lang": "en",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#131B2B",
+  "theme_color": "#131B2B",
+  "categories": ["education", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png?v=17",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png?v=17",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png?v=17",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icons/icon-192.png?v=17", "sizes": "192x192" }]
+    },
+    {
+      "name": "Students",
+      "short_name": "Students",
+      "url": "/students",
+      "icons": [{ "src": "/icons/icon-192.png?v=17", "sizes": "192x192" }]
+    },
+    {
+      "name": "Fee Records",
+      "short_name": "Fees",
+      "url": "/fees",
+      "icons": [{ "src": "/icons/icon-192.png?v=17", "sizes": "192x192" }]
+    }
+  ]
+}
