@@ -13,13 +13,13 @@ type Row = Record<string, unknown>;
 
 type PocketTab = 'overview' | 'topups' | 'cards' | 'purchases' | 'cashdesk' | 'reports';
 
-const pocketTabs: { key: PocketTab; label: string; icon: string }[] = [
-    { key: 'overview', label: 'Overview', icon: 'SquaresFour' },
-    { key: 'topups', label: 'Top-ups', icon: 'Phone' },
-    { key: 'cards', label: 'Cards', icon: 'CreditCard' },
-    { key: 'purchases', label: 'Purchases', icon: 'Scan' },
-    { key: 'cashdesk', label: 'Cash desk', icon: 'Money' },
-    { key: 'reports', label: 'Reports', icon: 'Receipt' },
+const pocketTabs: { key: PocketTab; label: string; desc: string; icon: string; tone: string }[] = [
+    { key: 'overview', label: 'Overview', desc: 'Card summary', icon: 'SquaresFour', tone: 'primary' },
+    { key: 'topups', label: 'Top-ups', desc: 'Weka Pocket Money', icon: 'Phone', tone: 'warning' },
+    { key: 'cards', label: 'Cards', desc: 'Student bank card', icon: 'CreditCard', tone: 'info' },
+    { key: 'purchases', label: 'Purchases', desc: 'Sensor payments', icon: 'Scan', tone: 'success' },
+    { key: 'cashdesk', label: 'Cash desk', desc: 'Requests & payout', icon: 'Money', tone: 'violet' },
+    { key: 'reports', label: 'Reports', desc: 'Ledger & limits', icon: 'Receipt', tone: 'primary' },
 ];
 
 type LimitRow = {
@@ -446,17 +446,24 @@ export default function PocketMoney() {
                     )}
                 </div>
 
-                <div className="tab-nav pocket-tab-nav" role="tablist" aria-label="Pocket Money sections">
+                <div className="parent-quick-grid pocket-quick-grid" role="tablist" aria-label="Pocket Money sections">
                     {pocketTabs.map((item) => (
                         <button
                             key={item.key}
                             type="button"
                             role="tab"
                             aria-selected={tab === item.key}
-                            className={`tab-btn pocket-tab-btn ${tab === item.key ? 'tab-btn-active' : 'tab-btn-inactive'}`}
                             onClick={() => setTab(item.key)}
+                            className={`parent-quick pocket-quick-tab tone-${item.tone}${tab === item.key ? ' active' : ''}`}
                         >
-                            <Icon name={item.icon} size={16} /> {item.label}
+                            <span className="quick-action-badge">
+                                <Icon name={item.icon} size={20} />
+                            </span>
+                            <span className="min-w-0">
+                                <span className="quick-action-title">{item.label}</span>
+                                <span className="quick-action-desc">{item.desc}</span>
+                            </span>
+                            <Icon name="CaretRight" size={14} className="parent-quick-arrow" />
                         </button>
                     ))}
                 </div>

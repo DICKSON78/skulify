@@ -2015,15 +2015,6 @@ a { color: inherit; }
   max-width: 100%;
 }
 
-.pocket-tab-nav { margin-bottom: 4px; }
-
-.pocket-tab-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
 .pocket-card-preview {
   display: flex;
   justify-content: center;
