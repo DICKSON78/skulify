@@ -252,26 +252,34 @@ export default function PocketMoney() {
                         </div>
                     </section>
 
-                    <section className="pocket-card-visual" aria-label="Student NFC card">
-                        <div className="pocket-card-top">
-                            <span><Icon name="GraduationCap" size={22} /> Skulify card</span>
+                    <section className="pocket-bank-card" aria-label="Skulify student bank card">
+                        <div className="pocket-bank-card-top">
+                            <span className="pocket-bank-brand">
+                                <Icon name="GraduationCap" size={20} /> Skulify card
+                            </span>
                             <Icon name="Scan" size={24} />
                         </div>
-                        <p className="pocket-card-uid">{text(selectedCard?.cardUid) || 'NO CARD SELECTED'}</p>
-                        <div className="pocket-card-balance">
+                        <div className="pocket-bank-chip-row">
+                            <span className="pocket-bank-chip" aria-hidden="true" />
+                            <span className="pocket-bank-card-type">Student bank card</span>
+                        </div>
+                        <p className="pocket-bank-card-uid">
+                            {text(selectedCard?.cardUid) || 'NO CARD SELECTED'}
+                        </p>
+                        <div className="pocket-bank-card-balance">
                             <span>Card balance</span>
                             <strong>{money(balance?.balance)}</strong>
                         </div>
-                        <div className="pocket-card-bottom">
+                        <div className="pocket-bank-card-bottom">
                             <div>
                                 <span>Account</span>
                                 <strong>{studentName}</strong>
                             </div>
                             <div>
                                 <span>Status</span>
-                                <strong className="pocket-card-status">
+                                <span className="pocket-card-status-pill">
                                     {text(selectedCard?.status) || 'ACTIVE'}
-                                </strong>
+                                </span>
                             </div>
                         </div>
                         <div className="pocket-card-foot">
