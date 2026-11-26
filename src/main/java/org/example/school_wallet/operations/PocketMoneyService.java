@@ -138,6 +138,127 @@ public class PocketMoneyService {
         return txn;
     }
 
+    /** Starts a mobile-money USSD push. The balance moves only after approval. */
+    public PocketTransaction requestTopUp(UUID cardId, Map<String, Object> body) {
+        PocketCard card = card(cardId);
+        BigDecimal amount = support.amount(body.get("amount"), ZERO);
+        if (amount.compareTo(ZERO) <= 0) {
+            throw Errors.badRequest("INVALID_AMOUNT", "Top-up amount must be greater than zero");
+        }
+        String providerReference = support.text(body.get("providerReference"));
+        PocketTransaction existing = providerReference.isEmpty()
+                ? null
+                : findByProviderReference(providerReference);
+        if (existing != null) {
+            return existing;
+        }
+
+        Student student = support.student(card.getStudentId());
+        PocketTransaction txn = newTransaction(
+                card,
+                PocketTransaction.Type.TOPUP,
+                amount,
+                "TOPUP",
+                card.getBalance(),
+                null,
+                null,
+                1,
+                providerReference,
+                "Mobile money USSD push awaiting parent approval");
+        txn.setStatus(PocketTransaction.Status.PENDING);
+        em.persist(txn);
+        support.audit("POCKET_USSD_PUSH_SENT", "POCKET_TRANSACTIONS", txn.getId(),
+                Map.of("amount", amount, "cardUid", card.getCardUid()));
+        support.notifyGuardian(
+                student,
+                "Approve pocket money top-up",
+                "A USSD prompt for " + amount + " TZS was sent to your phone. "
+                        + "Approve it to load card " + card.getCardUid() + ".",
+                "pocket-cards",
+                card.getId());
+        return txn;
+    }
+
+    public PocketTransaction decideTopUp(UUID transactionId, boolean approve) {
+        PocketTransaction txn = find(PocketTransaction.class, transactionId);
+        if (txn == null || txn.getType() != PocketTransaction.Type.TOPUP) {
+            throw Errors.notFound("TOPUP_NOT_FOUND", "Top-up request not found");
+        }
+        support.requireVisibleStudent(txn.getStudentId());
+        if (txn.getStatus() != PocketTransaction.Status.PENDING) {
+            throw Errors.badRequest("ALREADY_DECIDED", "This top-up was already decided");
+        }
+        PocketCard card = find(PocketCard.class, txn.getCardId());
+        Student student = support.student(txn.getStudentId());
+        if (approve) {
+            BigDecimal balance = card.getBalance() == null ? ZERO : card.getBalance();
+            BigDecimal updated = balance.add(txn.getAmount());
+            txn.setStatus(PocketTransaction.Status.POSTED);
+            txn.setBalanceAfter(updated);
+            txn.setDescription("Mobile money USSD push approved");
+            card.setBalance(updated);
+            em.merge(card);
+            support.audit("POCKET_USSD_PUSH_APPROVED", "POCKET_TRANSACTIONS", txn.getId(),
+                    Map.of("amount", txn.getAmount()));
+            support.notifyGuardian(
+                    student,
+                    "Pocket money loaded",
+                    txn.getAmount() + " TZS is now on card " + card.getCardUid()
+                            + ". New balance: " + updated + " TZS.",
+                    "pocket-cards",
+                    card.getId());
+        } else {
+            txn.setStatus(PocketTransaction.Status.FAILED);
+            txn.setDescription("Mobile money USSD push declined");
+            support.audit("POCKET_USSD_PUSH_DECLINED", "POCKET_TRANSACTIONS", txn.getId(),
+                    Map.of("amount", txn.getAmount()));
+        }
+        em.merge(txn);
+        return txn;
+    }
+
+    /** Finds the active Haba card linked to a student. */
+    public PocketCard activeCard(UUID studentId) {
+        return em.createQuery(
+                        """
+                        select c from PocketCard c
+                        where c.studentId = :studentId and c.status = 'ACTIVE'
+                        order by c.createdAt desc
+                        """,
+                        PocketCard.class)
+                .setParameter("studentId", studentId)
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Debits the card when a guardian approves a teacher's cash request. */
+    public PocketTransaction cashOut(UUID cardId, BigDecimal amount, String description) {
+        PocketCard card = card(cardId);
+        BigDecimal balance = card.getBalance() == null ? ZERO : card.getBalance();
+        if (amount.compareTo(balance) > 0) {
+            throw Errors.conflict("INSUFFICIENT_BALANCE", "Insufficient pocket money balance");
+        }
+        BigDecimal updated = balance.subtract(amount);
+        PocketTransaction txn = newTransaction(
+                card,
+                PocketTransaction.Type.CASH_OUT,
+                amount,
+                "CASH",
+                updated,
+                null,
+                null,
+                1,
+                null,
+                description);
+        em.persist(txn);
+        card.setBalance(updated);
+        em.merge(card);
+        support.audit("POCKET_CASH_OUT", "POCKET_TRANSACTIONS", txn.getId(),
+                Map.of("amount", amount));
+        return txn;
+    }
+
     public Map<String, Object> setLimits(UUID cardId, Map<String, Object> body) {
         PocketCard card = card(cardId);
         support.requireVisibleStudent(card.getStudentId());

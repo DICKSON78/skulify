@@ -31,6 +31,7 @@ public class SpaController implements WebMvcConfigurer {
             "/pocket-cards",
             "/spending-limits",
             "/pocket-transactions",
+            "/cash-requests",
             "/store-pos",
             "/store-items",
             "/store-terminals",

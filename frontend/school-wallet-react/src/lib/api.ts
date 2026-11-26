@@ -243,6 +243,19 @@ export const operationsApi = {
     pocketBalance: <T>(cardId: string) => request<T>(`/pocket/cards/${cardId}/balance`),
     topUp: <T>(cardId: string, body: Record<string, unknown>) =>
         request<T>(`/pocket/cards/${cardId}/topups`, withBody('POST', body)),
+    pushUssdTopUp: <T>(cardId: string, body: Record<string, unknown>) =>
+        request<T>(`/pocket/cards/${cardId}/topups/request`, withBody('POST', body)),
+    approveTopUp: <T>(transactionId: string) =>
+        request<T>(`/pocket/topups/${transactionId}/approve`, withBody('POST', {})),
+    declineTopUp: <T>(transactionId: string) =>
+        request<T>(`/pocket/topups/${transactionId}/decline`, withBody('POST', {})),
+    cashRequests: <T>() => request<T>('/cash-requests'),
+    requestCash: <T>(body: Record<string, unknown>) =>
+        request<T>('/cash-requests', withBody('POST', body)),
+    decideCashRequest: <T>(id: string, decision: string, note: string) =>
+        request<T>(`/cash-requests/${id}/decide`, withBody('POST', { decision, note })),
+    payoutCashRequest: <T>(id: string, agentCode: string, note: string) =>
+        request<T>(`/cash-requests/${id}/payout`, withBody('POST', { agentCode, note })),
     setLimits: <T>(cardId: string, body: Record<string, unknown>) =>
         request<T>(`/pocket/cards/${cardId}/limits`, withBody('PUT', body)),
     setCardStatus: <T>(cardId: string, status: string) =>

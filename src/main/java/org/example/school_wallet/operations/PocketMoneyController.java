@@ -42,6 +42,24 @@ public class PocketMoneyController {
         return service.topUp(id, body);
     }
 
+    @PostMapping("/pocket/cards/{id}/topups/request")
+    public PocketTransaction requestTopUp(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        policy.require("pocket-topups", ResourceAccessPolicy.Action.CREATE);
+        return service.requestTopUp(id, body);
+    }
+
+    @PostMapping("/pocket/topups/{id}/approve")
+    public PocketTransaction approveTopUp(@PathVariable UUID id) {
+        policy.require("pocket-topups", ResourceAccessPolicy.Action.UPDATE);
+        return service.decideTopUp(id, true);
+    }
+
+    @PostMapping("/pocket/topups/{id}/decline")
+    public PocketTransaction declineTopUp(@PathVariable UUID id) {
+        policy.require("pocket-topups", ResourceAccessPolicy.Action.UPDATE);
+        return service.decideTopUp(id, false);
+    }
+
     @PutMapping("/pocket/cards/{id}/limits")
     public Map<String, Object> limits(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         policy.require("spending-limits", ResourceAccessPolicy.Action.UPDATE);

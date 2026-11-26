@@ -304,6 +304,24 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 pocketTransaction("PTX-DEMO-009", cardId, studentId, "PURCHASE", 11000,
                         "SNACKS", 188500, id(canteenTerminal), id(itemLunch), 2,
                         "POS-CANTEEN-01-DEMO-009", "Sensor purchase: Lunch snack pack"));
+        seedOne("pocket-transactions", "reference", "PTX-DEMO-010",
+                pocketTransaction("PTX-DEMO-010", cardId, studentId, "TOPUP", 30000,
+                        "TOPUP", 188500, null, null, 1, "USSD-DEMO-PENDING",
+                        "Mobile money USSD push awaiting parent approval", "PENDING"));
+
+        seedOne("cash-requests", "reason", "Demo cash request - school trip fare",
+                cashRequest(studentId, id(teacher1), 15000, "Demo cash request - school trip fare",
+                        "PENDING", "2026-11-26T08:15:00Z", "", "CASH-DEMO-PEND1", "",
+                        "0712345678", ""));
+        seedOne("cash-requests", "reason", "Demo cash request - stationery",
+                cashRequest(studentId, id(teacher1), 12000, "Demo cash request - stationery",
+                        "APPROVED", "2026-11-25T10:05:00Z", "2026-11-25T10:08:00Z",
+                        "PAY-DEMO-APPR1", "", "0712345678", "Approved by guardian"));
+        seedOne("cash-requests", "reason", "Demo cash request - library fine",
+                cashRequest(studentId, id(teacher1), 5000, "Demo cash request - library fine",
+                        "PAID", "2026-11-24T09:30:00Z", "2026-11-24T09:33:00Z",
+                        "PAY-DEMO-PAID1", "AGENT-DAR-01", "0712345678",
+                        "Cash collected at agent"));
 
         seedOne("spending-limits", "category", "SNACKS",
                 categoryLimit(cardId, studentId, "SNACKS", 25000, 100000, 300000));
@@ -374,6 +392,14 @@ public class AcademicDemoSeeder implements ApplicationRunner {
             String reference, String cardId, String studentId, String type, int amount,
             String category, int balanceAfter, String terminalId, String itemId, int quantity,
             String providerReference, String description) {
+        return pocketTransaction(reference, cardId, studentId, type, amount, category,
+                balanceAfter, terminalId, itemId, quantity, providerReference, description, "POSTED");
+    }
+
+    private Map<String, Object> pocketTransaction(
+            String reference, String cardId, String studentId, String type, int amount,
+            String category, int balanceAfter, String terminalId, String itemId, int quantity,
+            String providerReference, String description, String status) {
         Map<String, Object> data = new HashMap<>();
         data.put("reference", reference);
         data.put("cardId", UUID.fromString(cardId));
@@ -390,9 +416,35 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         }
         data.put("quantity", quantity);
         data.put("providerReference", providerReference);
-        data.put("status", "POSTED");
+        data.put("status", status);
         data.put("description", description);
         return data;
+    }
+
+    private Map<String, Object> cashRequest(
+            String studentId,
+            String teacherId,
+            int amount,
+            String reason,
+            String status,
+            String requestedAt,
+            String decidedAt,
+            String payoutReference,
+            String agentCode,
+            String phoneNumber,
+            String note) {
+        return Map.ofEntries(
+                Map.entry("studentId", UUID.fromString(studentId)),
+                Map.entry("teacherId", UUID.fromString(teacherId)),
+                Map.entry("amount", BigDecimal.valueOf(amount)),
+                Map.entry("reason", reason),
+                Map.entry("status", status),
+                Map.entry("requestedAt", requestedAt),
+                Map.entry("decidedAt", decidedAt),
+                Map.entry("payoutReference", payoutReference),
+                Map.entry("agentCode", agentCode),
+                Map.entry("phoneNumber", phoneNumber),
+                Map.entry("note", note));
     }
 
     private Map<String, Object> categoryLimit(

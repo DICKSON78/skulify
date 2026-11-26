@@ -42,7 +42,7 @@ public class ResourceAccessPolicy {
             "academic-automation", "online-tests", "test-attempts", "parent-letters");
     private static final Set<String> FINANCE = Set.of(
             "fees", "payments", "invoices", "invoice-items", "fee-categories", "fee-plans",
-            "pocket-cards", "pocket-transactions", "store-items");
+            "pocket-cards", "pocket-transactions", "cash-requests", "store-items");
     private static final Set<String> LIBRARY = Set.of(
             "books", "book-copies", "book-loans", "book-reservations", "lab-sessions");
     private static final Set<String> STORE = Set.of(
@@ -59,7 +59,7 @@ public class ResourceAccessPolicy {
             "students", "attendance", "grades", "fees", "timetable",
             "periods", "exams", "exam-sessions", "report-cards", "school-events",
             "invoices", "fee-plans", "fee-categories", "pocket-cards", "pocket-transactions",
-            "spending-limits", "store-items", "books", "book-copies", "book-loans",
+            "cash-requests", "spending-limits", "store-items", "books", "book-copies", "book-loans",
             "book-reservations", "lab-sessions", "parent-letters", "test-attempts");
 
     /**
@@ -68,7 +68,8 @@ public class ResourceAccessPolicy {
      * studentId for scoped users so a guardian cannot write another child's row.
      */
     private static final Set<String> GUARDIAN_WRITES = Set.of(
-            "pocket-topups", "spending-limits", "book-reservations", "lab-sessions");
+            "pocket-topups", "spending-limits", "book-reservations", "lab-sessions",
+            "cash-requests");
 
     public void require(String resource, Action action) {
         if (!can(resource, action)) {
@@ -131,7 +132,7 @@ public class ResourceAccessPolicy {
                 return true;
             }
             if (Set.of("store-items", "store-terminals", "pocket-cards", "pocket-transactions",
-                    "invoices", "fees").contains(resource)) {
+                    "cash-requests", "invoices", "fees").contains(resource)) {
                 return action == Action.READ;
             }
             return action == Action.READ && "school-tasks".equals(resource);
@@ -168,6 +169,10 @@ public class ResourceAccessPolicy {
         }
 
         if (isTeacher(user)) {
+            // Teachers request transport/cash from the child's card and confirm agent pickup.
+            if ("cash-requests".equals(resource)) {
+                return action != Action.DELETE;
+            }
             // Teachers record their own check-in/check-out, which raises HR/admin alerts.
             if ("staff-attendance".equals(resource)) {
                 return action != Action.DELETE;

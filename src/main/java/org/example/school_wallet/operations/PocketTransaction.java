@@ -64,7 +64,7 @@ public class PocketTransaction extends TenantOwnedEntity implements StudentLinke
     @Column(length = 500)
     private String description;
 
-    public enum Type { TOPUP, PURCHASE, REFUND, ADJUSTMENT }
+    public enum Type { TOPUP, PURCHASE, REFUND, ADJUSTMENT, CASH_OUT }
 
     public enum Status { PENDING, POSTED, REVERSED, FAILED }
 }

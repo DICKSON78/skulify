@@ -83,6 +83,7 @@ export const PATH_ACCESS: Record<string, AppRole[]> = {
     '/pocket-cards': [...FINANCE, 'CASHIER', ...GUARDIAN],
     '/spending-limits': [...FINANCE, ...GUARDIAN],
     '/pocket-transactions': [...FINANCE, 'STORE_KEEPER', 'CASHIER', ...GUARDIAN],
+    '/cash-requests': [...FINANCE, 'TEACHER', 'CLASS_TEACHER', 'CASHIER', ...GUARDIAN],
     '/store-pos': [...ADMIN, 'CASHIER'],
     '/store-items': [...STORE_STAFF, 'ACCOUNTANT', 'TEACHER', 'CLASS_TEACHER', ...GUARDIAN],
     '/store-terminals': [...STORE_STAFF, 'ACCOUNTANT'],
@@ -145,7 +146,12 @@ export const isWriteRole = (roles: string[]): boolean =>
 export const isGuardian = (roles: string[]): boolean =>
     roles.some((role) => role === 'PARENT' || role === 'STUDENT');
 
-const GUARDIAN_WRITABLE = ['spending-limits', 'book-reservations', 'lab-sessions'];
+const GUARDIAN_WRITABLE = [
+    'spending-limits',
+    'book-reservations',
+    'lab-sessions',
+    'cash-requests',
+];
 
 const FINANCE_RESOURCES = [
     'fees',
@@ -156,6 +162,7 @@ const FINANCE_RESOURCES = [
     'fee-plans',
     'pocket-cards',
     'pocket-transactions',
+    'cash-requests',
 ];
 
 const STORE_RESOURCES = [
@@ -237,6 +244,7 @@ export const canWriteResource = (resource: string, roles: string[]): boolean => 
             'online-tests',
             'staff-attendance',
             'school-tasks',
+            'cash-requests',
         ].includes(resource);
     }
     if (roles.includes('ACCOUNTANT')) {

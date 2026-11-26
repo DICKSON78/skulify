@@ -54,6 +54,7 @@ const navGroups: NavGroup[] = [
             { path: '/pocket-cards', label: 'Student Cards', icon: 'CreditCard' },
             { path: '/spending-limits', label: 'Spending Limits', icon: 'Shield' },
             { path: '/pocket-transactions', label: 'Card Transactions', icon: 'ArrowsLeftRight' },
+            { path: '/cash-requests', label: 'Cash Requests', icon: 'Money' },
         ],
     },
     {

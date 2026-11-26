@@ -5,6 +5,7 @@ import ProtectedRoute from '../auth/ProtectedRoute';
 import Login from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
 import PocketMoney from '../pages/PocketMoney';
+import CashRequests from '../pages/CashRequests';
 import LibraryDesk from '../pages/LibraryDesk';
 import StorePos from '../pages/StorePos';
 import OperationsHub from '../pages/OperationsHub';
@@ -36,6 +37,10 @@ export default function AppRouter() {
           <Route
             path="/pocket-money"
             element={<ProtectedRoute path="/pocket-money"><PocketMoney /></ProtectedRoute>}
+          />
+          <Route
+            path="/cash-requests"
+            element={<ProtectedRoute path="/cash-requests"><CashRequests /></ProtectedRoute>}
           />
           <Route
             path="/library-desk"

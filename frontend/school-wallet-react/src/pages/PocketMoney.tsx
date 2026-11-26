@@ -32,6 +32,14 @@ type Balance = {
 const message = (reason: unknown): string =>
     reason instanceof Error ? reason.message : 'Request failed';
 
+const statusTone = (status: string): string => {
+    if (status === 'PENDING') return 'badge-warning';
+    if (status === 'POSTED') return 'badge-success';
+    if (status === 'FAILED') return 'badge-danger';
+    if (status === 'REVERSED') return 'badge-info';
+    return 'badge-primary';
+};
+
 const percent = (spent: number | undefined, limit: number | undefined): number => {
     const cap = Number(limit ?? 0);
     if (cap <= 0) {
@@ -189,6 +197,43 @@ export default function PocketMoney() {
         }
     };
 
+    const pushUssd = async () => {
+        setError('');
+        setSuccess('');
+        try {
+            await operationsApi.pushUssdTopUp(cardId, {
+                amount,
+                providerReference: reference,
+            });
+            setSuccess('PUSH USSD sent to the parent phone. Approve it to load the child card.');
+            setAmount('');
+            setReference('');
+            loadCard(cardId);
+        } catch (reason) {
+            setError(message(reason));
+        }
+    };
+
+    const decideTopUp = async (transactionId: string, approve: boolean) => {
+        setError('');
+        setSuccess('');
+        try {
+            if (approve) {
+                await operationsApi.approveTopUp(transactionId);
+            } else {
+                await operationsApi.declineTopUp(transactionId);
+            }
+            setSuccess(
+                approve
+                    ? 'USSD top-up approved. Money is now on the child card.'
+                    : 'USSD top-up declined. No money was deducted.',
+            );
+            loadCard(cardId);
+        } catch (reason) {
+            setError(message(reason));
+        }
+    };
+
     const selectedCard = cards.find((row) => text(row.id) === cardId);
     const selectedStudent = students.find(
         (row) => text(row.id) === text(selectedCard?.studentId),
@@ -199,7 +244,10 @@ export default function PocketMoney() {
     const activeTerminals = terminals.filter((row) => text(row.status) === 'ACTIVE');
     const selectedItem = items.find((row) => text(row.id) === itemId);
     const chargeTotal = Number(selectedItem?.price ?? 0) * (Number(quantity) || 0);
-    const latestPurchase = transactions.find((row) => text(row.type) === 'PURCHASE');
+    const latestPurchase = transactions.find((row) => text(row.type) === 'PURCHASE')
+    const pendingTopups = transactions.filter(
+        (row) => text(row.type) === 'TOPUP' && text(row.status) === 'PENDING',
+    );
     const lastTap = latestPurchase?.createdAt
         ? new Date(String(latestPurchase.createdAt)).toLocaleTimeString([], {
             hour: '2-digit',
@@ -318,7 +366,11 @@ export default function PocketMoney() {
                 </FormCard>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <FormCard title="Top up card" icon="Plus">
+                    <FormCard title="Top up with mobile money" icon="Phone">
+                        <p className="pocket-copy mb-4">
+                            Enter the amount, press <strong>PUSH USSD</strong>, then approve the prompt
+                            on the parent phone. The money moves straight onto the child's Skulify card.
+                        </p>
                         <div className="space-y-3">
                             <label className="block">
                                 <span className="form-label">Amount (TZS)</span>
@@ -340,24 +392,34 @@ export default function PocketMoney() {
                                     placeholder="e.g. M-PESA-QWERTY"
                                 />
                             </label>
-                            <button
-                                type="button"
-                                disabled={!cardId || !amount}
-                                onClick={() =>
-                                    void run(
-                                        () =>
-                                            operationsApi.topUp(cardId, {
-                                                amount,
-                                                providerReference: reference,
-                                                category: 'TOPUP',
-                                            }),
-                                        'Top-up recorded. The child can now use the card at the store.',
-                                    )
-                                }
-                                className="btn-primary"
-                            >
-                                <Icon name="Plus" size={18} className="mr-2" /> Add money
-                            </button>
+                            <div className="pocket-topup-actions">
+                                <button
+                                    type="button"
+                                    disabled={!cardId || !amount}
+                                    onClick={() => void pushUssd()}
+                                    className="btn-primary"
+                                >
+                                    <Icon name="Phone" size={18} className="mr-2" /> PUSH USSD
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!cardId || !amount}
+                                    onClick={() =>
+                                        void run(
+                                            () =>
+                                                operationsApi.topUp(cardId, {
+                                                    amount,
+                                                    providerReference: reference,
+                                                    category: 'TOPUP',
+                                                }),
+                                            'Top-up recorded. The child can now use the card at the store.',
+                                        )
+                                    }
+                                    className="btn-outline"
+                                >
+                                    <Icon name="Plus" size={18} className="mr-2" /> Add money directly
+                                </button>
+                            </div>
                         </div>
                     </FormCard>
 
@@ -415,6 +477,44 @@ export default function PocketMoney() {
                         </button>
                     </FormCard>
                 </div>
+
+                {pendingTopups.length > 0 && (
+                    <FormCard title="Pending USSD approvals" icon="Bell">
+                        <p className="pocket-copy mb-4">
+                            These payments are waiting on the parent phone. Money is only added to the
+                            child card after approval.
+                        </p>
+                        <div className="pocket-pending-list">
+                            {pendingTopups.map((row) => (
+                                <div key={text(row.id)} className="pocket-pending-row">
+                                    <div className="pocket-pending-main">
+                                        <Icon name="Phone" size={18} />
+                                        <div>
+                                            <strong>{text(row.providerReference)}</strong>
+                                            <span>{money(row.amount)} · {text(row.description)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="pocket-pending-actions">
+                                        <button
+                                            type="button"
+                                            className="btn-primary btn-xs"
+                                            onClick={() => void decideTopUp(text(row.id), true)}
+                                        >
+                                            Approve
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-outline btn-xs"
+                                            onClick={() => void decideTopUp(text(row.id), false)}
+                                        >
+                                            Decline
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </FormCard>
+                )}
 
                 {posAllowed && (
                     <FormCard title="Sensor transaction" icon="Scan">
@@ -493,6 +593,7 @@ export default function PocketMoney() {
                                 <tr>
                                     <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
                                     <th><span className="table-col"><TableIcon label="Type" /><span>Type</span></span></th>
+                                    <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
                                     <th><span className="table-col"><TableIcon label="Category" /><span>Category</span></span></th>
                                     <th><span className="table-col"><TableIcon label="Amount" /><span>Amount</span></span></th>
                                     <th><span className="table-col"><TableIcon label="Balance after" /><span>Balance after</span></span></th>
@@ -508,6 +609,7 @@ export default function PocketMoney() {
                                         <tr key={text(row.id)}>
                                             <td><div className="table-cell-content"><TableIcon label="Reference" value={row.reference} /><span className="min-w-0 font-mono text-xs">{text(row.reference)}</span></div></td>
                                             <td><div className="table-cell-content"><TableIcon label="Type" value={row.type} /><span className="min-w-0"><span className={`badge ${text(row.type) === 'TOPUP' ? 'badge-success' : text(row.type) === 'REFUND' ? 'badge-info' : 'badge-primary'}`}>{text(row.type)}</span></span></div></td>
+                                            <td><div className="table-cell-content"><TableIcon label="Status" value={row.status} /><span className="min-w-0"><span className={`badge ${statusTone(text(row.status) || 'POSTED')}`}>{text(row.status) || 'POSTED'}</span></span></div></td>
                                             <td><div className="table-cell-content"><TableIcon label="Category" value={row.category} /><span className="min-w-0">{text(row.category)}</span></div></td>
                                             <td><div className="table-cell-content"><TableIcon label="Amount" value={row.amount} /><span className="min-w-0 font-semibold">{money(row.amount)}</span></div></td>
                                             <td><div className="table-cell-content"><TableIcon label="Balance after" value={row.balanceAfter} /><span className="min-w-0">{money(row.balanceAfter)}</span></div></td>
@@ -524,7 +626,7 @@ export default function PocketMoney() {
                                     );
                                 })}
                                 {transactions.length === 0 && (
-                                    <TableEmptyState colSpan={6} icon="Receipt" message="No transactions yet." />
+                                    <TableEmptyState colSpan={7} icon="Receipt" message="No transactions yet." />
                                 )}
                             </tbody>
                         </table>

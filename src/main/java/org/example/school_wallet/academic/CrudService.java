@@ -39,6 +39,7 @@ import org.example.school_wallet.operations.InvoiceItem;
 import org.example.school_wallet.operations.LabSession;
 import org.example.school_wallet.operations.ParentLetter;
 import org.example.school_wallet.operations.PocketCard;
+import org.example.school_wallet.operations.CashWithdrawalRequest;
 import org.example.school_wallet.operations.PocketTransaction;
 import org.example.school_wallet.operations.Period;
 import org.example.school_wallet.operations.PurchaseRequest;
@@ -93,6 +94,7 @@ public class CrudService {
             Map.entry("pocket-cards", PocketCard.class),
             Map.entry("spending-limits", SpendingLimit.class),
             Map.entry("pocket-transactions", PocketTransaction.class),
+            Map.entry("cash-requests", CashWithdrawalRequest.class),
             Map.entry("store-items", StoreItem.class),
             Map.entry("store-terminals", StoreTerminal.class),
             Map.entry("inventory-items", InventoryItem.class),

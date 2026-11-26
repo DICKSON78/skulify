@@ -2253,6 +2253,65 @@ a { color: inherit; }
 
 .pocket-receipt .badge { margin-left: auto; }
 
+.pocket-topup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pocket-pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pocket-pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--tint);
+}
+
+.pocket-pending-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pocket-pending-main > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pocket-pending-main strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.pocket-pending-main span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pocket-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cash-agent-input { width: 140px; }
+
 /* Flat interaction surfaces: no button glow, card lifts or card shadows. */
 button,
 .btn-primary,
@@ -2294,6 +2353,10 @@ button,
   .pocket-meter-grid { grid-template-columns: 1fr; }
   .pocket-charge-row { align-items: stretch; flex-direction: column; }
   .pocket-receipt .badge { margin-left: 0; }
+  .pocket-topup-actions,
+  .pocket-pending-row,
+  .pocket-pending-actions { align-items: stretch; flex-direction: column; }
+  .cash-agent-input { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
