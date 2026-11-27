@@ -97,7 +97,7 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         Map<String, Object> year = seedFirst("academic-years",
                 academicYear("2026/2027", "2026-01-01", "2026-12-31"));
         Map<String, Object> term = seedFirst("terms",
-                term(id(year), "Term 1", 1, "2026-01-01", "2026-04-30"));
+                term(id(year), "Term 1", 1, "2026-01-01", "2026-04-30", 16));
 
         seedOne("attendance", "remarks", "Demo attendance 1",
                 attendance(id(student1), "2026-11-18", "PRESENT", "08:05", "Demo attendance 1"));
@@ -163,7 +163,7 @@ public class AcademicDemoSeeder implements ApplicationRunner {
             crud.create("teacher-assignments",
                     assignment(id(teacher1), id(class1), id(subject1), id(year), "CLASS_TEACHER"));
             crud.create("teacher-assignments",
-                    assignment(id(teacher2), id(class2), id(subject2), id(year), "SUBJECT_TEACHER"));
+                    assignment(id(teacher2), id(class2), id(subject2), id(year), "CLASS_TEACHER"));
         }
 
         Map<String, Object> reportCard = seedOne("report-cards", "reference", "DEMO-RC-001",
@@ -741,13 +741,14 @@ public class AcademicDemoSeeder implements ApplicationRunner {
     }
 
     private Map<String, Object> term(
-            String yearId, String name, int order, String start, String end) {
+            String yearId, String name, int order, String start, String end, int numberOfWeeks) {
         return Map.of(
                 "academicYearId", yearId,
                 "name", name,
                 "termOrder", order,
                 "startDate", start,
                 "endDate", end,
+                "numberOfWeeks", numberOfWeeks,
                 "status", "ACTIVE");
     }
 

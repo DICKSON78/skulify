@@ -33,6 +33,10 @@ public class Term extends TenantOwnedEntity {
     @Column(name = "end_date", length = 20)
     private String endDate;
 
+    /** Teaching weeks in this semester; attendance progress is measured against this. */
+    @Column(name = "number_of_weeks", nullable = false)
+    private int numberOfWeeks = 16;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Status status = Status.ACTIVE;

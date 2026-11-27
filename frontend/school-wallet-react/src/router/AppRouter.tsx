@@ -4,6 +4,7 @@ import { AuthProvider } from '../auth/AuthContext';
 import ProtectedRoute from '../auth/ProtectedRoute';
 import Login from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
+import ClassAttendance from '../pages/ClassAttendance';
 import PocketMoney from '../pages/PocketMoney';
 import CashRequests from '../pages/CashRequests';
 import LibraryDesk from '../pages/LibraryDesk';
@@ -81,6 +82,11 @@ export default function AppRouter() {
           <Route
             path="/school-documents"
             element={<ProtectedRoute path="/school-documents"><SchoolDocuments /></ProtectedRoute>}
+          />
+
+          <Route
+            path="/attendance"
+            element={<ProtectedRoute path="/attendance"><ClassAttendance /></ProtectedRoute>}
           />
 
           {Object.values(RESOURCE_CONFIGS).map((config) => (

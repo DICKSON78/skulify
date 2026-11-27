@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface EnrolmentRepository extends JpaRepository<Enrolment, UUID> {
 
     List<Enrolment> findByStudentIdAndStatus(UUID studentId, Enrolment.Status status);
+
+    List<Enrolment> findByClassIdAndStatus(UUID classId, Enrolment.Status status);
 }

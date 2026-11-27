@@ -137,7 +137,7 @@ public class AcademicWorkflowService {
     }
 
     /** Login ids and linked teacher record ids both count when checking assignments. */
-    private Set<UUID> currentTeacherIds() {
+    public Set<UUID> currentTeacherIds() {
         Set<UUID> ids = new LinkedHashSet<>();
         Optional<AuthenticatedUser> current = CurrentUser.get();
         if (current.isEmpty()) {

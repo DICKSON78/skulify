@@ -68,6 +68,7 @@ export const PATH_ACCESS: Record<string, AppRole[]> = {
     '/teachers': [...ACADEMIC, 'LIBRARIAN', 'STORE_KEEPER', 'HR_MANAGER'],
     '/classes': [...ACADEMIC, 'LIBRARIAN', 'HR_MANAGER'],
     '/subjects': [...ACADEMIC, 'LIBRARIAN', 'HR_MANAGER'],
+    '/terms': [...ADMIN, 'REGISTRAR', 'ACADEMIC_MASTER'],
     '/teacher-assignments': [...ADMIN, 'REGISTRAR', 'ACADEMIC_MASTER', 'TEACHER', 'CLASS_TEACHER'],
     '/school-documents': [...ADMIN, 'HR_MANAGER'],
     '/attendance': [...ACADEMIC, ...GUARDIAN],

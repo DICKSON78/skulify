@@ -453,6 +453,72 @@ export const RESOURCE_CONFIGS: Record<string, ResourceConfig> = {
         ],
     },
 
+    terms: {
+        resource: 'terms',
+        title: 'Terms',
+        subtitle: 'Set semester dates and the number of teaching weeks',
+        icon: 'Calendar',
+        singular: 'Term',
+        stats: [
+            { label: 'Terms', icon: 'Calendar', value: (_rows, total) => total, tone: 'primary' },
+            {
+                label: 'Active',
+                icon: 'CheckCircle',
+                value: (rows) => countWhere(rows, (row) => asText(row.status) === 'ACTIVE'),
+                tone: 'success',
+            },
+            {
+                label: 'Teaching weeks',
+                icon: 'Clock',
+                value: (rows) => rows.reduce((sum, row) => sum + (Number(row.numberOfWeeks) || 0), 0),
+                tone: 'info',
+            },
+        ],
+        searchPlaceholder: 'Search terms...',
+        columns: [
+            { key: 'name', label: 'Term' },
+            {
+                key: 'academicYearId',
+                label: 'Academic year',
+                reference: { resource: 'academic-years', label: labelOf('name', 'code') },
+            },
+            { key: 'termOrder', label: 'Order' },
+            { key: 'startDate', label: 'Start date', format: 'date' },
+            { key: 'endDate', label: 'End date', format: 'date' },
+            { key: 'numberOfWeeks', label: 'Weeks' },
+            { key: 'status', label: 'Status', format: 'badge' },
+        ],
+        fields: [
+            {
+                key: 'academicYearId',
+                label: 'Academic year',
+                type: 'reference',
+                required: true,
+                reference: { resource: 'academic-years', label: labelOf('name', 'code') },
+            },
+            { key: 'name', label: 'Term name', required: true, placeholder: 'e.g. Term 1' },
+            { key: 'termOrder', label: 'Order', type: 'number', required: true, defaultValue: 1 },
+            { key: 'startDate', label: 'Start date', type: 'date' },
+            { key: 'endDate', label: 'End date', type: 'date' },
+            {
+                key: 'numberOfWeeks',
+                label: 'Teaching weeks',
+                type: 'number',
+                required: true,
+                defaultValue: 16,
+                placeholder: '16',
+            },
+            {
+                key: 'status',
+                label: 'Status',
+                type: 'select',
+                options: ['ACTIVE', 'CLOSED'],
+                defaultValue: 'ACTIVE',
+                required: true,
+            },
+        ],
+    },
+
     'staff-attendance': {
         resource: 'staff-attendance',
         title: 'Staff Attendance',

@@ -25,6 +25,7 @@ const navGroups: NavGroup[] = [
         label: 'Academics',
         items: [
             { path: '/classes', label: 'Classes', icon: 'Buildings' },
+            { path: '/terms', label: 'Terms', icon: 'Calendar' },
             { path: '/teacher-assignments', label: 'Class Management', icon: 'ChalkboardTeacher' },
             { path: '/subjects', label: 'Subjects', icon: 'Books' },
             { path: '/attendance', label: 'Attendance', icon: 'CalendarCheck' },

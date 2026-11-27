@@ -2486,3 +2486,81 @@ button,
     animation: preloaderShake 0.7s ease-in-out infinite !important;
   }
 }
+
+/* === CLASS ATTENDANCE REGISTER === */
+.attendance-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--primary-light);
+}
+
+.attendance-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.attendance-roster-scroll {
+  max-height: 620px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+
+.attendance-roster-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+}
+
+.attendance-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.attendance-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--card);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.attendance-choice input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.attendance-choice.selected-present {
+  border-color: #16A34A;
+  color: #16A34A;
+  background: #DCFCE7;
+}
+
+.attendance-choice.selected-absent {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #FEE2E2;
+}
+
+.attendance-choice.selected-excused {
+  border-color: var(--warning);
+  color: #B45309;
+  background: #FEF3C7;
+}

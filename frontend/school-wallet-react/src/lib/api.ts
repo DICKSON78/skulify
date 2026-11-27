@@ -228,6 +228,20 @@ const withBody = (method: 'POST' | 'PUT', body: Record<string, unknown>): Reques
     body: JSON.stringify(body),
 });
 
+/** Class-teacher attendance register with semester-week based progress. */
+export const classAttendanceApi = {
+    overview: <T>(classId?: string, termId?: string, week?: number) => {
+        const params = new URLSearchParams();
+        if (classId) params.set('classId', classId);
+        if (termId) params.set('termId', termId);
+        if (week) params.set('week', String(week));
+        const query = params.toString();
+        return request<T>(`/class-attendance${query ? `?${query}` : ''}`);
+    },
+    save: <T>(body: Record<string, unknown>) =>
+        request<T>('/class-attendance', withBody('POST', body)),
+};
+
 /** Domain actions that sit alongside the generic /api/v1/{resource} CRUD surface. */
 export const operationsApi = {
     feeSummary: <T>() => request<T>('/fee-management/summary'),
