@@ -1,7 +1,7 @@
 import Icon from './Icon';
 import TableEmptyState from './TableEmptyState';
 import TableIcon from './TableIcon';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Layout from './Layout';
 import PageHeader from './PageHeader';
@@ -217,6 +217,15 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
     const { user } = useAuth();
     const writable = canWriteResource(config.resource, user?.roles ?? []);
     const lookups = useResourceLookups(config.fields);
+    const referencesByKey = useMemo(
+        () =>
+            new Map(
+                config.fields
+                    .filter((field) => field.reference)
+                    .map((field) => [field.key, field.reference as ReferenceConfig]),
+            ),
+        [config.fields],
+    );
     const [rows, setRows] = useState<Row[]>([]);
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -316,20 +325,28 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
         }
     };
 
+    const referenceFor = (column: ColumnConfig): ReferenceConfig | undefined =>
+        column.reference ?? referencesByKey.get(column.key);
+
     const displayValue = (row: Row, column: ColumnConfig): unknown => {
         const raw = row[column.key];
-        if (!column.reference) {
-            return raw;
-        }
-        return optionLabel(lookups[column.reference.resource], raw);
+        const reference = referenceFor(column);
+        return reference ? optionLabel(lookups[reference.resource], raw) : raw;
     };
 
     const renderCell = (row: Row, column: ColumnConfig) => {
+        const value = displayValue(row, column);
+        if (referenceFor(column)) {
+            return value ? (
+                <span className="font-medium text-gray-900">{asText(value)}</span>
+            ) : (
+                <span className="text-gray-400">—</span>
+            );
+        }
         if (column.render) {
             return column.render(row, lookups);
         }
         const raw = row[column.key];
-        const value = displayValue(row, column);
         if (column.format === 'badge') {
             const badgeValue = typeof raw === 'boolean' ? (raw ? 'ACTIVE' : 'INACTIVE') : asText(raw);
             if (!badgeValue) {
