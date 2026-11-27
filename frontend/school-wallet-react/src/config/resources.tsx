@@ -3,6 +3,7 @@ import {
     asText,
     countWhere,
     money,
+    optionLabel,
     sumNumbers,
     uniqueCount,
     type ResourceConfig,
@@ -392,17 +393,27 @@ export const RESOURCE_CONFIGS: Record<string, ResourceConfig> = {
             {
                 key: 'teacherId',
                 label: 'Teacher',
-                render: (row) => (
-                    <div>
-                        <p className="font-semibold text-gray-900">
-                            {asText(row.teacherId).slice(0, 8) || '—'}
-                        </p>
-                        <p className="text-xs text-gray-400">Assigned staff member</p>
-                    </div>
-                ),
+                reference: { resource: 'teachers', label: teacherLabel },
+                render: (row, lookups) => {
+                    const name = optionLabel(lookups.teachers, row.teacherId);
+                    return (
+                        <div>
+                            <p className="font-semibold text-gray-900">{name || '—'}</p>
+                            <p className="text-xs text-gray-400">Assigned staff member</p>
+                        </div>
+                    );
+                },
             },
-            { key: 'classId', label: 'Class' },
-            { key: 'subjectId', label: 'Subject' },
+            {
+                key: 'classId',
+                label: 'Class',
+                reference: { resource: 'classes', label: classLabel },
+            },
+            {
+                key: 'subjectId',
+                label: 'Subject',
+                reference: { resource: 'subjects', label: subjectLabel },
+            },
             { key: 'scope', label: 'Scope', format: 'badge' },
             { key: 'status', label: 'Status', format: 'badge' },
         ],

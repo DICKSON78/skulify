@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { asText, type FieldConfig, type Option, type ReferenceConfig, type Row } from '../components/ResourcePage';
+import type { FieldConfig, Option, ReferenceConfig, Row } from '../components/ResourcePage';
 import { api } from '../lib/api';
+
+const asText = (value: unknown): string =>
+    value === null || value === undefined ? '' : String(value);
 
 /** Loads dropdown options for every reference field on a resource form. */
 export default function useResourceLookups(fields: FieldConfig[]): Record<string, Option[]> {

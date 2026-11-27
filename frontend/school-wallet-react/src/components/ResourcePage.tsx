@@ -8,6 +8,7 @@ import PageHeader from './PageHeader';
 import { StatTile } from './ModuleUi';
 import { useAuth } from '../auth/AuthContext';
 import { canWriteResource } from '../auth/permissions';
+import useResourceLookups from '../hooks/useResourceLookups';
 import { api } from '../lib/api';
 
 export type Row = Record<string, unknown>;
@@ -55,7 +56,9 @@ export type ColumnConfig = {
     label: string;
     icon?: string;
     format?: ColumnFormat;
-    render?: (row: Row) => ReactNode;
+    /** Resolves a foreign-key cell to the label of the referenced resource. */
+    reference?: ReferenceConfig;
+    render?: (row: Row, lookups: Record<string, Option[]>) => ReactNode;
     className?: string;
 };
 
@@ -84,6 +87,14 @@ type Notice = { kind: 'success' | 'error'; message: string } | null;
 
 export const asText = (value: unknown): string =>
     value === null || value === undefined ? '' : String(value);
+
+export const optionLabel = (options: Option[] | undefined, value: unknown): string => {
+    const id = asText(value);
+    if (!id || !options) {
+        return '';
+    }
+    return options.find((option) => option.value === id)?.label ?? '';
+};
 
 export const pretty = (value: string): string =>
     value
@@ -205,6 +216,7 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
     const location = useLocation();
     const { user } = useAuth();
     const writable = canWriteResource(config.resource, user?.roles ?? []);
+    const lookups = useResourceLookups(config.fields);
     const [rows, setRows] = useState<Row[]>([]);
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -304,17 +316,26 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
         }
     };
 
+    const displayValue = (row: Row, column: ColumnConfig): unknown => {
+        const raw = row[column.key];
+        if (!column.reference) {
+            return raw;
+        }
+        return optionLabel(lookups[column.reference.resource], raw);
+    };
+
     const renderCell = (row: Row, column: ColumnConfig) => {
         if (column.render) {
-            return column.render(row);
+            return column.render(row, lookups);
         }
         const raw = row[column.key];
+        const value = displayValue(row, column);
         if (column.format === 'badge') {
-            const value = typeof raw === 'boolean' ? (raw ? 'ACTIVE' : 'INACTIVE') : asText(raw);
-            if (!value) {
+            const badgeValue = typeof raw === 'boolean' ? (raw ? 'ACTIVE' : 'INACTIVE') : asText(raw);
+            if (!badgeValue) {
                 return <span className="text-gray-400">—</span>;
             }
-            return <span className={`badge ${badgeClass(value)}`}>{pretty(value)}</span>;
+            return <span className={`badge ${badgeClass(badgeValue)}`}>{pretty(badgeValue)}</span>;
         }
         if (column.format === 'currency') {
             return raw === null || raw === undefined ? (
@@ -323,10 +344,10 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
                 money(raw)
             );
         }
-        if (raw === null || raw === undefined || raw === '') {
+        if (value === null || value === undefined || value === '') {
             return <span className="text-gray-400">—</span>;
         }
-        return asText(raw);
+        return asText(value);
     };
 
     const from = totalElements === 0 ? 0 : page * pageSize + 1;
@@ -334,7 +355,7 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
     const deleteLabel = deleting
         ? config.columns
               .slice(0, 2)
-              .map((column) => asText(deleting[column.key]))
+              .map((column) => asText(displayValue(deleting, column)))
               .filter(Boolean)
               .join(' · ')
         : '';
@@ -432,18 +453,21 @@ export default function ResourcePage({ config }: { config: ResourceConfig }) {
                                 ) : (
                                     rows.map((row) => (
                                         <tr key={asText(row.id)}>
-                                            {config.columns.map((column) => (
-                                                <td
-                                                    key={column.key}
-                                                    className={column.className}
-                                                    title={asText(row[column.key]) || undefined}
-                                                >
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label={column.label} value={row[column.key]} />
-                                                        <span className="min-w-0">{renderCell(row, column)}</span>
-                                                    </div>
-                                                </td>
-                                            ))}
+                                            {config.columns.map((column) => {
+                                                const value = displayValue(row, column);
+                                                return (
+                                                    <td
+                                                        key={column.key}
+                                                        className={column.className}
+                                                        title={asText(value) || undefined}
+                                                    >
+                                                        <div className="table-cell-content">
+                                                            <TableIcon label={column.label} value={value} />
+                                                            <span className="min-w-0">{renderCell(row, column)}</span>
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
                                             <td>
                                                 <div className="table-cell-content">
                                                     <TableIcon name="ListChecks" />

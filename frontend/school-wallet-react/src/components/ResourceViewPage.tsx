@@ -9,23 +9,35 @@ import {
     asText,
     badgeClass,
     errorMessage,
+    optionLabel,
     pretty,
     type FieldConfig,
+    type Option,
     type ResourceConfig,
     type Row,
 } from './ResourcePage';
 import { groupFormFields } from '../lib/formSections';
 import { useAuth } from '../auth/AuthContext';
 import { canWriteResource } from '../auth/permissions';
+import useResourceLookups from '../hooks/useResourceLookups';
 import { api } from '../lib/api';
 
 type ResourceViewPageProps = {
     config: ResourceConfig;
 };
 
-const displayValue = (field: FieldConfig, value: unknown): ReactNode => {
+const displayValue = (
+    field: FieldConfig,
+    value: unknown,
+    lookups: Record<string, Option[]>,
+): ReactNode => {
     if (field.type === 'boolean') {
         return value ? 'Yes' : 'No';
+    }
+
+    if (field.reference) {
+        return optionLabel(lookups[field.reference.resource], value)
+            || <span className="text-gray-400">—</span>;
     }
 
     const text = asText(value);
@@ -62,6 +74,7 @@ export default function ResourceViewPage({ config }: ResourceViewPageProps) {
     const { id } = useParams();
     const { user } = useAuth();
     const writable = canWriteResource(config.resource, user?.roles ?? []);
+    const lookups = useResourceLookups(config.fields);
     const [record, setRecord] = useState<Row | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -178,7 +191,7 @@ export default function ResourceViewPage({ config }: ResourceViewPageProps) {
                                                     {field.label}
                                                 </div>
                                                 <div className="view-tile-value">
-                                                    {displayValue(field, record[field.key])}
+                                                    {displayValue(field, record[field.key], lookups)}
                                                 </div>
                                             </div>
                                         ))}
