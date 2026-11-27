@@ -14,6 +14,7 @@ type Overview = {
     grades?: Row[];
     attendance?: Row;
     attendanceRecords?: Row[];
+    semesterAttendance?: Row;
     reportCards?: Row[];
     letters?: Row[];
     fees?: Row;
@@ -22,12 +23,17 @@ type Overview = {
     timetable?: Row[];
 };
 
-type Tab = 'overview' | 'results' | 'attendance' | 'cards' | 'letters' | 'fees' | 'timetable';
+type TopTab = 'overview' | 'academics' | 'attendance' | 'fees';
+type AcademicTab = 'results' | 'cards' | 'letters';
+type AttendanceTab = 'weeks' | 'daily' | 'timetable';
 
 const message = (reason: unknown): string =>
     reason instanceof Error ? reason.message : 'Request failed';
 
 const rows = (value: unknown): Row[] => (Array.isArray(value) ? (value as Row[]) : []);
+
+const asRow = (value: unknown): Row =>
+    value && typeof value === 'object' && !Array.isArray(value) ? (value as Row) : {};
 
 const num = (value: unknown): number => Number(value) || 0;
 
@@ -241,11 +247,43 @@ function ParentTableCard({
     );
 }
 
+function SubTabs<T extends string>({
+    items,
+    active,
+    onChange,
+    label,
+}: {
+    items: Array<{ key: T; label: string; icon: string }>;
+    active: T;
+    onChange: (key: T) => void;
+    label: string;
+}) {
+    return (
+        <div className="tab-nav parent-subtabs" role="tablist" aria-label={label}>
+            {items.map((item) => (
+                <button
+                    key={item.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active === item.key}
+                    onClick={() => onChange(item.key)}
+                    className={`tab-btn ${active === item.key ? 'tab-btn-active' : 'tab-btn-inactive'}`}
+                >
+                    <Icon name={item.icon} size={16} />
+                    <span>{item.label}</span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
 export default function ParentPortal() {
     const [children, setChildren] = useState<Row[]>([]);
     const [studentId, setStudentId] = useState('');
     const [overview, setOverview] = useState<Overview | null>(null);
-    const [tab, setTab] = useState<Tab>('overview');
+    const [tab, setTab] = useState<TopTab>('overview');
+    const [academicTab, setAcademicTab] = useState<AcademicTab>('results');
+    const [attendanceTab, setAttendanceTab] = useState<AttendanceTab>('weeks');
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -283,6 +321,19 @@ export default function ParentPortal() {
 
     const average = pct(bestCard?.average ?? (overview?.gradesByTerm?.[0]?.average ?? 0));
     const attendanceRate = pct(attendance.rate);
+    const semester = asRow(overview?.semesterAttendance);
+    const semesterChild = asRow(semester.student);
+    const semesterProgress = pct(semester.semesterProgress);
+    const completedWeeks = num(semester.completedWeeks);
+    const semesterWeeks = num(semester.numberOfWeeks);
+    const semesterWeek = num(semester.week);
+    const semesterWeekRows = rows(semester.weeks);
+    const semesterSelectedWeek =
+        semesterWeekRows.find((weekRow) => num(weekRow.number) === semesterWeek) ?? {};
+    const semesterChildStatus = text(semesterSelectedWeek.status);
+    const weekProgress = pct(semester.weekProgress);
+    const markedThisWeek = num(semester.markedThisWeek);
+    const semesterClassSize = num(semester.totalStudents);
     const feeBilled = num(fees.billed);
     const feePaid = num(fees.paid);
     const feeClearance = feeBilled ? pct((feePaid / feeBilled) * 100) : 0;
@@ -294,7 +345,7 @@ export default function ParentPortal() {
         num(attendance.total) ? pct((num(value) / num(attendance.total)) * 100) : 0;
 
     const tabs: Array<{
-        key: Tab;
+        key: TopTab;
         label: string;
         desc: string;
         icon: string;
@@ -307,36 +358,33 @@ export default function ParentPortal() {
             icon: 'SquaresFour',
             tone: 'primary',
         },
-        { key: 'results', label: 'Results', desc: 'Subjects & grades', icon: 'Exam', tone: 'primary' },
         {
-            key: 'attendance',
-            label: 'Attendance',
-            desc: 'Daily check-ins',
-            icon: 'CalendarCheck',
-            tone: 'success',
-        },
-        {
-            key: 'cards',
-            label: 'Report cards',
-            desc: 'Term summaries',
-            icon: 'Certificate',
+            key: 'academics',
+            label: 'Academics',
+            desc: 'Results, cards & letters',
+            icon: 'Books',
             tone: 'violet',
         },
         {
-            key: 'letters',
-            label: 'Letters',
-            desc: 'Guardian notes',
-            icon: 'EnvelopeOpen',
-            tone: 'info',
+            key: 'attendance',
+            label: 'Attendance',
+            desc: 'Semester weeks & check-ins',
+            icon: 'CalendarCheck',
+            tone: 'success',
         },
         { key: 'fees', label: 'Fees', desc: 'Payments & balance', icon: 'Wallet', tone: 'warning' },
-        {
-            key: 'timetable',
-            label: 'Timetable',
-            desc: 'Weekly schedule',
-            icon: 'Table',
-            tone: 'primary',
-        },
+    ];
+
+    const academicTabs: Array<{ key: AcademicTab; label: string; icon: string }> = [
+        { key: 'results', label: 'Results', icon: 'Exam' },
+        { key: 'cards', label: 'Report cards', icon: 'Certificate' },
+        { key: 'letters', label: 'Letters', icon: 'EnvelopeOpen' },
+    ];
+
+    const attendanceTabs: Array<{ key: AttendanceTab; label: string; icon: string }> = [
+        { key: 'weeks', label: 'Semester weeks', icon: 'CalendarCheck' },
+        { key: 'daily', label: 'Daily check-ins', icon: 'ListChecks' },
+        { key: 'timetable', label: 'Timetable', icon: 'Table' },
     ];
 
     return (
@@ -359,7 +407,7 @@ export default function ParentPortal() {
                     </FormCard>
                 ) : (
                     <>
-                        {children.length > 1 && (
+                        {children.length > 0 && (
                             <div className="parent-child-switcher">
                                 <span className="parent-child-switcher-label">
                                     <Icon name="UsersThree" size={16} />
@@ -367,6 +415,7 @@ export default function ParentPortal() {
                                 </span>
                                 <select
                                     className="form-input"
+                                    aria-label="Viewing child"
                                     value={studentId}
                                     onChange={(event) => setStudentId(event.target.value)}
                                 >
@@ -460,12 +509,12 @@ export default function ParentPortal() {
                                         footer="Best published term result"
                                     />
                                     <MetricCard
-                                        label="Attendance"
-                                        value={`${Math.round(attendanceRate)}%`}
+                                        label="Semester attendance"
+                                        value={`${Math.round(semesterProgress)}%`}
                                         icon="CalendarCheck"
-                                        progress={attendanceRate}
+                                        progress={semesterProgress}
                                         tone="success"
-                                        footer="Sessions marked present"
+                                        footer="Completed weeks ÷ semester weeks"
                                     />
                                     <MetricCard
                                         label="Fee clearance"
@@ -504,9 +553,9 @@ export default function ParentPortal() {
                                             tone="primary"
                                         />
                                         <SnapshotDonut
-                                            value={attendanceRate}
+                                            value={semesterProgress}
                                             label="Attendance"
-                                            caption="School presence"
+                                            caption="Completed weeks ÷ semester weeks"
                                             icon="CalendarCheck"
                                             tone="success"
                                         />
@@ -522,181 +571,305 @@ export default function ParentPortal() {
                             </>
                         )}
 
-                        {tab === 'results' && (
-                            <div className="space-y-4">
-                                {(overview?.gradesByTerm ?? []).map((term, index) => (
+                        {tab === 'academics' && (
+                            <>
+                                <SubTabs
+                                    items={academicTabs}
+                                    active={academicTab}
+                                    onChange={setAcademicTab}
+                                    label="Academics sections"
+                                />
+                                {academicTab === 'results' && (
+                                    <div className="space-y-4">
+                                        {(overview?.gradesByTerm ?? []).map((term, index) => (
+                                            <ParentTableCard
+                                                key={`${text(term.term)}-${index}`}
+                                                title={`${label(term.term)} · ${num(term.average)}% average`}
+                                                count={rows(term.subjects).length}
+                                                icon="Books"
+                                            >
+                                                <table className="re-table parent-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th><span className="table-col"><TableIcon label="Subject" /><span>Subject</span></span></th>
+                                                            <th><span className="table-col"><TableIcon label="Assessment" /><span>Assessment</span></span></th>
+                                                            <th><span className="table-col"><TableIcon label="Score" /><span>Score</span></span></th>
+                                                            <th><span className="table-col"><TableIcon label="Grade" /><span>Grade</span></span></th>
+                                                            <th><span className="table-col"><TableIcon label="Remarks" /><span>Remarks</span></span></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {rows(term.subjects).map((result, rowIndex) => {
+                                                            const maxScore = num(result.maxScore);
+                                                            const scorePercent = maxScore
+                                                                ? pct((num(result.score) / maxScore) * 100)
+                                                                : 0;
+                                                            return (
+                                                                <tr key={`${text(result.subject)}-${rowIndex}`}>
+                                                                    <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Subject" value={result.subject} /><CellText value={result.subject} /></div></td>
+                                                                    <td><div className="table-cell-content"><TableIcon label="Assessment" value={result.examType} /><CellText value={result.examType} /></div></td>
+                                                                    <td>
+                                                                        <div className="table-cell-content">
+                                                                            <TableIcon label="Score" value={result.score} />
+                                                                            <div className="parent-score">
+                                                                                <div className="parent-score-line">
+                                                                                    <span>{num(result.score)} / {maxScore}</span>
+                                                                                    <strong>{Math.round(scorePercent)}%</strong>
+                                                                                </div>
+                                                                                <Progress
+                                                                                    value={scorePercent}
+                                                                                    label={`${label(result.subject)} score`}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td><div className="table-cell-content"><TableIcon label="Grade" value={result.grade} /><CellText value={result.grade}><StatusBadge label={label(result.grade)} tone="primary" /></CellText></div></td>
+                                                                    <td><div className="table-cell-content"><TableIcon label="Remarks" value={result.remarks} /><CellText value={result.remarks} /></div></td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </ParentTableCard>
+                                        ))}
+                                        {(overview?.gradesByTerm ?? []).length === 0 && (
+                                            <FormCard title="No subject results yet" icon="Info">
+                                                <p className="text-sm text-gray-600">
+                                                    Results appear here as soon as your child's teacher uploads marks.
+                                                </p>
+                                            </FormCard>
+                                        )}
+                                    </div>
+                                )}
+
+                                {academicTab === 'cards' && (
                                     <ParentTableCard
-                                        key={`${text(term.term)}-${index}`}
-                                        title={`${label(term.term)} · ${num(term.average)}% average`}
-                                        count={rows(term.subjects).length}
-                                        icon="Books"
+                                        title="Report cards & results"
+                                        count={cards.length}
+                                        icon="Certificate"
                                     >
-                                <table className="re-table parent-table">
+                                        <table className="re-table parent-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Term" /><span>Term</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Class" /><span>Class</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Average" /><span>Average</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Position" /><span>Position</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {cards.map((card) => (
+                                                    <tr key={text(card.id)}>
+                                                        <td className="font-mono text-xs"><div className="table-cell-content"><TableIcon label="Reference" value={card.reference} /><CellText value={card.reference} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Term" value={card.term} /><CellText value={card.term} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Class" value={card.className} /><CellText value={card.className} /></div></td>
+                                                        <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Average" value={card.average} /><CellText value={`${num(card.average)}% · ${label(card.grade)}`} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Position" value={card.position} /><CellText value={`${num(card.position)} / ${num(card.classSize)}`} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Status" value={card.status} /><CellText value={card.status}><StatusBadge label={label(card.status)} tone={toneForValue(card.status)} /></CellText></div></td>
+                                                    </tr>
+                                                ))}
+                                                {cards.length === 0 && (
+                                                    <TableEmptyState colSpan={6} message="No report cards published yet." />
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </ParentTableCard>
+                                )}
+
+                                {academicTab === 'letters' && (
+                                    <div className="space-y-4">
+                                        {rows(overview?.letters).map((letter) => (
+                                            <FormCard
+                                                key={text(letter.id)}
+                                                title={`${text(letter.title)} · ${text(letter.reference)}`}
+                                                icon="EnvelopeOpen"
+                                            >
+                                                <p className="text-xs text-gray-500 mb-3">
+                                                    {label(letter.term)} · generated {label(letter.generatedAt)}
+                                                </p>
+                                                <pre className="whitespace-pre-wrap rounded-xl bg-gray-50 p-4 text-sm text-gray-700 font-sans">
+                                                    {text(letter.content)}
+                                                </pre>
+                                                <div className="mt-3 rounded-xl border border-primary/20 bg-primary-light/50 p-4">
+                                                    <p className="text-xs font-bold uppercase tracking-wider text-primary mb-2">
+                                                        Next-semester requirements
+                                                    </p>
+                                                    <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
+                                                        {text(letter.requirements)}
+                                                    </pre>
+                                                </div>
+                                            </FormCard>
+                                        ))}
+                                        {rows(overview?.letters).length === 0 && (
+                                            <FormCard title="No parent letters yet" icon="Info">
+                                                <p className="text-sm text-gray-600">
+                                                    Letters are generated automatically after results are published.
+                                                </p>
+                                            </FormCard>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {tab === 'attendance' && (
+                            <>
+                                <SubTabs
+                                    items={attendanceTabs}
+                                    active={attendanceTab}
+                                    onChange={setAttendanceTab}
+                                    label="Attendance sections"
+                                />
+                                {attendanceTab === 'weeks' && (
+                                    <div className="space-y-4">
+                                        <div className="parent-metric-grid parent-metric-grid--compact">
+                                            <MetricCard label="Weeks complete" value={`${completedWeeks} / ${semesterWeeks}`} icon="CalendarCheck" progress={semesterProgress} tone="success" footer={`${label(semester.termName)} · week ${semesterWeek}`} />
+                                            <MetricCard label="Semester attendance" value={`${Math.round(semesterProgress)}%`} icon="ChartLineUp" progress={semesterProgress} tone="primary" footer="Completed weeks ÷ semester weeks" />
+                                            <MetricCard label="Marked in week" value={markedThisWeek} icon="ListChecks" progress={weekProgress} tone="warning" footer={`${label(semester.className)} · ${semesterClassSize} student(s)`} />
+                                            <MetricCard label="Child status" value={semesterChildStatus ? label(semesterChildStatus) : '—'} icon="UserCheck" progress={semesterChildStatus ? 100 : 0} tone={semesterChildStatus === 'PRESENT' ? 'success' : 'info'} footer={`Week ${semesterWeek || '—'} register`} />
+                                        </div>
+                                        <FormCard title="Progress" icon="ChartLineUp">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                                <div>
+                                                    <div className="flex items-center justify-between gap-3 mb-2">
+                                                        <span className="text-sm font-semibold text-gray-800">
+                                                            Semester progress
+                                                        </span>
+                                                        <span className="text-sm font-semibold text-primary">
+                                                            {Math.round(semesterProgress)}%
+                                                        </span>
+                                                    </div>
+                                                    <Progress value={semesterProgress} label="Semester attendance progress" />
+                                                    <p className="text-xs text-muted mt-2">
+                                                        {completedWeeks} of {semesterWeeks} weeks complete ·{' '}
+                                                        {label(semester.weekStart)} to {label(semester.weekEnd)}
+                                                    </p>
+                                                    <p className="text-xs text-muted mt-1">
+                                                        {num(semesterChild.marked)} of {semesterWeeks} weeks recorded for {studentName} ·{' '}
+                                                        {num(semesterChild.present)} present
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-between gap-3 mb-2">
+                                                        <span className="text-sm font-semibold text-gray-800">
+                                                            Latest register
+                                                        </span>
+                                                        <span className="text-sm font-semibold text-primary">
+                                                            {Math.round(weekProgress)}%
+                                                        </span>
+                                                    </div>
+                                                    <Progress value={weekProgress} label="Latest register attendance progress" />
+                                                    <p className="text-xs text-muted mt-2">
+                                                        {markedThisWeek} of {semesterClassSize} student(s) marked in week {semesterWeek}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </FormCard>
+                                        <ParentTableCard
+                                            title="Semester weeks"
+                                            count={semesterWeekRows.length}
+                                            icon="CalendarCheck"
+                                        >
+                                            <table className="re-table parent-table">
                                                 <thead>
                                                     <tr>
-                                                        <th><span className="table-col"><TableIcon label="Subject" /><span>Subject</span></span></th>
-                                                        <th><span className="table-col"><TableIcon label="Assessment" /><span>Assessment</span></span></th>
-                                                        <th><span className="table-col"><TableIcon label="Score" /><span>Score</span></span></th>
-                                                        <th><span className="table-col"><TableIcon label="Grade" /><span>Grade</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Week" /><span>Week</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Dates" /><span>Dates</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Class marked" /><span>Class marked</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Child status" /><span>Child status</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Register" /><span>Register</span></span></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {semesterWeekRows.map((weekRow, index) => (
+                                                        <tr key={`${text(weekRow.number)}-${index}`}>
+                                                            <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Week" value={weekRow.number} /><CellText value={`Week ${label(weekRow.number)}`} /></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Dates" value={weekRow.startDate} /><CellText value={`${label(weekRow.startDate)} – ${label(weekRow.endDate)}`} /></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Class marked" value={weekRow.marked} /><CellText value={`${num(weekRow.marked)} / ${num(weekRow.total)}`} /></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Child status" value={weekRow.status} /><CellText value={weekRow.status}><StatusBadge label={label(weekRow.status)} tone={toneForValue(weekRow.status)} /></CellText></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Register" value={weekRow.complete} /><CellText value={weekRow.complete}><StatusBadge label={weekRow.complete ? 'Complete' : 'In progress'} tone={weekRow.complete ? 'success' : 'warning'} /></CellText></div></td>
+                                                        </tr>
+                                                    ))}
+                                                    {semesterWeekRows.length === 0 && (
+                                                        <TableEmptyState colSpan={5} message="No semester weeks configured yet." />
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </ParentTableCard>
+                                    </div>
+                                )}
+
+                                {attendanceTab === 'daily' && (
+                                    <div className="space-y-4">
+                                        <div className="parent-metric-grid parent-metric-grid--compact">
+                                            <MetricCard label="Days" value={num(attendance.total)} icon="CalendarBlank" progress={100} tone="primary" footer="Recorded sessions" />
+                                            <MetricCard label="Present" value={num(attendance.present)} icon="CheckCircle" progress={attendanceRate} tone="success" footer="Attended sessions" />
+                                            <MetricCard label="Absent" value={num(attendance.absent)} icon="XCircle" progress={shareOfTotal(attendance.absent)} tone="danger" footer="Missed sessions" />
+                                            <MetricCard label="Late" value={num(attendance.late)} icon="Clock" progress={shareOfTotal(attendance.late)} tone="warning" footer="Arrived after time" />
+                                            <MetricCard label="Excused" value={num(attendance.excused)} icon="CalendarPlus" progress={shareOfTotal(attendance.excused)} tone="info" footer="Approved absence" />
+                                        </div>
+                                        <ParentTableCard
+                                            title="Attendance record"
+                                            count={rows(overview?.attendanceRecords).length}
+                                            icon="CalendarCheck"
+                                        >
+                                            <table className="re-table parent-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th><span className="table-col"><TableIcon label="Date" /><span>Date</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
+                                                        <th><span className="table-col"><TableIcon label="Check-in" /><span>Check-in</span></span></th>
                                                         <th><span className="table-col"><TableIcon label="Remarks" /><span>Remarks</span></span></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {rows(term.subjects).map((result, rowIndex) => {
-                                                        const maxScore = num(result.maxScore);
-                                                        const scorePercent = maxScore
-                                                            ? pct((num(result.score) / maxScore) * 100)
-                                                            : 0;
-                                                        return (
-                                                            <tr
-                                                                key={`${text(result.subject)}-${rowIndex}`}
-                                                               
-                                                            >
-                                                                <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Subject" value={result.subject} /><CellText value={result.subject} /></div></td>
-                                                                <td><div className="table-cell-content"><TableIcon label="Assessment" value={result.examType} /><CellText value={result.examType} /></div></td>
-                                                                <td>
-                                                                    <div className="table-cell-content">
-                                                                        <TableIcon label="Score" value={result.score} />
-                                                                        <div className="parent-score">
-                                                                            <div className="parent-score-line">
-                                                                                <span>{num(result.score)} / {maxScore}</span>
-                                                                                <strong>{Math.round(scorePercent)}%</strong>
-                                                                            </div>
-                                                                            <Progress
-                                                                                value={scorePercent}
-                                                                                label={`${label(result.subject)} score`}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td><div className="table-cell-content"><TableIcon label="Grade" value={result.grade} /><CellText value={result.grade}><StatusBadge label={label(result.grade)} tone="primary" /></CellText></div></td>
-                                                                <td><div className="table-cell-content"><TableIcon label="Remarks" value={result.remarks} /><CellText value={result.remarks} /></div></td>
-                                                            </tr>
-                                                        );
-                                                    })}
+                                                    {rows(overview?.attendanceRecords).map((record, index) => (
+                                                        <tr key={`${text(record.date)}-${index}`}>
+                                                            <td><div className="table-cell-content"><TableIcon label="Date" value={record.date} /><CellText value={record.date} /></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Status" value={record.status} /><CellText value={record.status}><StatusBadge label={label(record.status)} tone={toneForValue(record.status)} /></CellText></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Check-in" value={record.checkIn} /><CellText value={record.checkIn} /></div></td>
+                                                            <td><div className="table-cell-content"><TableIcon label="Remarks" value={record.remarks} /><CellText value={record.remarks} /></div></td>
+                                                        </tr>
+                                                    ))}
+                                                    {rows(overview?.attendanceRecords).length === 0 && (
+                                                        <TableEmptyState colSpan={4} message="No attendance records yet." />
+                                                    )}
                                                 </tbody>
-                                </table>
-                                </ParentTableCard>
-                                ))}
-                                {(overview?.gradesByTerm ?? []).length === 0 && (
-                                    <FormCard title="No subject results yet" icon="Info">
-                                        <p className="text-sm text-gray-600">
-                                            Results appear here as soon as your child's teacher uploads marks.
-                                        </p>
-                                    </FormCard>
+                                            </table>
+                                        </ParentTableCard>
+                                    </div>
                                 )}
-                            </div>
-                        )}
 
-                        {tab === 'attendance' && (
-                            <div className="space-y-4">
-                                <div className="parent-metric-grid parent-metric-grid--compact">
-                                    <MetricCard label="Days" value={num(attendance.total)} icon="CalendarBlank" progress={100} tone="primary" footer="Recorded sessions" />
-                                    <MetricCard label="Present" value={num(attendance.present)} icon="CheckCircle" progress={attendanceRate} tone="success" footer="Attended sessions" />
-                                    <MetricCard label="Absent" value={num(attendance.absent)} icon="XCircle" progress={shareOfTotal(attendance.absent)} tone="danger" footer="Missed sessions" />
-                                    <MetricCard label="Late" value={num(attendance.late)} icon="Clock" progress={shareOfTotal(attendance.late)} tone="warning" footer="Arrived after time" />
-                                    <MetricCard label="Excused" value={num(attendance.excused)} icon="CalendarPlus" progress={shareOfTotal(attendance.excused)} tone="info" footer="Approved absence" />
-                                </div>
-                                <ParentTableCard
-                                    title="Attendance record"
-                                    count={rows(overview?.attendanceRecords).length}
-                                    icon="CalendarCheck"
-                                >
-                                <table className="re-table parent-table">
-                                        <thead>
-                                            <tr>
-                                                <th><span className="table-col"><TableIcon label="Date" /><span>Date</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Check-in" /><span>Check-in</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Remarks" /><span>Remarks</span></span></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows(overview?.attendanceRecords).map((record, index) => (
-                                                <tr key={`${text(record.date)}-${index}`}>
-                                                    <td><div className="table-cell-content"><TableIcon label="Date" value={record.date} /><CellText value={record.date} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Status" value={record.status} /><CellText value={record.status}><StatusBadge label={label(record.status)} tone={toneForValue(record.status)} /></CellText></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Check-in" value={record.checkIn} /><CellText value={record.checkIn} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Remarks" value={record.remarks} /><CellText value={record.remarks} /></div></td>
+                                {attendanceTab === 'timetable' && (
+                                    <ParentTableCard title="Weekly timetable" count={rows(overview?.timetable).length} icon="Table">
+                                        <table className="re-table parent-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><span className="table-col"><TableIcon label="Day" /><span>Day</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Subject" /><span>Subject</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Time" /><span>Time</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Room" /><span>Room</span></span></th>
                                                 </tr>
-                                            ))}
-                                            {rows(overview?.attendanceRecords).length === 0 && (
-                                                <TableEmptyState colSpan={4} message="No attendance records yet." />
-                                            )}
-                                        </tbody>
-                                </table>
-                                </ParentTableCard>
-                            </div>
-                        )}
-
-                        {tab === 'cards' && (
-                            <ParentTableCard
-                                title="Report cards & results"
-                                count={cards.length}
-                                icon="Certificate"
-                            >
-                                <table className="re-table parent-table">
-                                        <thead>
-                                            <tr>
-                                                <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Term" /><span>Term</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Class" /><span>Class</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Average" /><span>Average</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Position" /><span>Position</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {cards.map((card) => (
-                                                <tr key={text(card.id)}>
-                                                    <td className="font-mono text-xs"><div className="table-cell-content"><TableIcon label="Reference" value={card.reference} /><CellText value={card.reference} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Term" value={card.term} /><CellText value={card.term} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Class" value={card.className} /><CellText value={card.className} /></div></td>
-                                                    <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Average" value={card.average} /><CellText value={`${num(card.average)}% · ${label(card.grade)}`} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Position" value={card.position} /><CellText value={`${num(card.position)} / ${num(card.classSize)}`} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Status" value={card.status} /><CellText value={card.status}><StatusBadge label={label(card.status)} tone={toneForValue(card.status)} /></CellText></div></td>
-                                                </tr>
-                                            ))}
-                                            {cards.length === 0 && (
-                                                <TableEmptyState colSpan={6} message="No report cards published yet." />
-                                            )}
-                                        </tbody>
-                                </table>
-                                </ParentTableCard>
-                        )}
-
-                        {tab === 'letters' && (
-                            <div className="space-y-4">
-                                {rows(overview?.letters).map((letter) => (
-                                    <FormCard
-                                        key={text(letter.id)}
-                                        title={`${text(letter.title)} · ${text(letter.reference)}`}
-                                        icon="EnvelopeOpen"
-                                    >
-                                        <p className="text-xs text-gray-500 mb-3">
-                                            {label(letter.term)} · generated {label(letter.generatedAt)}
-                                        </p>
-                                        <pre className="whitespace-pre-wrap rounded-xl bg-gray-50 p-4 text-sm text-gray-700 font-sans">
-                                            {text(letter.content)}
-                                        </pre>
-                                        <div className="mt-3 rounded-xl border border-primary/20 bg-primary-light/50 p-4">
-                                            <p className="text-xs font-bold uppercase tracking-wider text-primary mb-2">
-                                                Next-semester requirements
-                                            </p>
-                                            <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
-                                                {text(letter.requirements)}
-                                            </pre>
-                                        </div>
-                                    </FormCard>
-                                ))}
-                                {rows(overview?.letters).length === 0 && (
-                                    <FormCard title="No parent letters yet" icon="Info">
-                                        <p className="text-sm text-gray-600">
-                                            Letters are generated automatically after results are published.
-                                        </p>
-                                    </FormCard>
+                                            </thead>
+                                            <tbody>
+                                                {rows(overview?.timetable).map((entry, index) => (
+                                                    <tr key={`${text(entry.day)}-${text(entry.start)}-${index}`}>
+                                                        <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Day" value={entry.day} /><CellText value={entry.day} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Subject" value={entry.subject} /><CellText value={entry.subject} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Time" value={entry.start} /><CellText value={`${label(entry.start)} – ${label(entry.end)}`} /></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Room" value={entry.room} /><CellText value={entry.room} /></div></td>
+                                                    </tr>
+                                                ))}
+                                                {rows(overview?.timetable).length === 0 && (
+                                                    <TableEmptyState colSpan={4} message="No timetable entries for this class yet." />
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </ParentTableCard>
                                 )}
-                            </div>
+                            </>
                         )}
 
                         {tab === 'fees' && (
@@ -711,7 +884,7 @@ export default function ParentPortal() {
                                     count={rows(overview?.feeRecords).length}
                                     icon="Wallet"
                                 >
-                                <table className="re-table parent-table">
+                                    <table className="re-table parent-table">
                                         <thead>
                                             <tr>
                                                 <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
@@ -737,38 +910,11 @@ export default function ParentPortal() {
                                                 <TableEmptyState colSpan={6} message="No fee records yet." />
                                             )}
                                         </tbody>
-                                </table>
+                                    </table>
                                 </ParentTableCard>
                             </div>
                         )}
 
-                        {tab === 'timetable' && (
-                            <ParentTableCard title="Weekly timetable" count={rows(overview?.timetable).length} icon="Table">
-                                <table className="re-table parent-table">
-                                        <thead>
-                                            <tr>
-                                                <th><span className="table-col"><TableIcon label="Day" /><span>Day</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Subject" /><span>Subject</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Time" /><span>Time</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Room" /><span>Room</span></span></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows(overview?.timetable).map((entry, index) => (
-                                                <tr key={`${text(entry.day)}-${text(entry.start)}-${index}`}>
-                                                    <td className="font-semibold"><div className="table-cell-content"><TableIcon label="Day" value={entry.day} /><CellText value={entry.day} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Subject" value={entry.subject} /><CellText value={entry.subject} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Time" value={entry.start} /><CellText value={`${label(entry.start)} – ${label(entry.end)}`} /></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Room" value={entry.room} /><CellText value={entry.room} /></div></td>
-                                                </tr>
-                                            ))}
-                                            {rows(overview?.timetable).length === 0 && (
-                                                <TableEmptyState colSpan={4} message="No timetable entries for this class yet." />
-                                            )}
-                                        </tbody>
-                                </table>
-                                </ParentTableCard>
-                        )}
                     </>
                 )}
             </div>

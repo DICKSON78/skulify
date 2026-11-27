@@ -1735,6 +1735,7 @@ a { color: inherit; }
 
 
 .parent-progress {
+  --parent-accent: var(--primary);
   height: 8px;
   margin-top: 12px;
   overflow: hidden;
@@ -1831,6 +1832,18 @@ a { color: inherit; }
   font-size: 12px;
   line-height: 1.35;
   text-align: center;
+}
+
+.parent-subtabs {
+  margin: 0 0 20px;
+}
+
+.parent-subtabs .tab-btn {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
 }
 
 .parent-quick-grid {

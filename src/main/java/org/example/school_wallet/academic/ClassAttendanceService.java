@@ -1,7 +1,5 @@
 package org.example.school_wallet.academic;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -65,7 +63,7 @@ public class ClassAttendanceService {
         List<SchoolClass> accessible = accessibleClasses();
         SchoolClass schoolClass = resolveClass(accessible, requestedClassId);
         Term term = resolveTerm(requestedTermId);
-        int weekCount = weekCount(term);
+        int weekCount = SemesterAttendance.weekCount(term);
         int week = clamp(requestedWeek == null ? 1 : requestedWeek, 1, weekCount);
 
         List<Student> roster = roster(schoolClass.getId(), term);
@@ -74,23 +72,19 @@ public class ClassAttendanceService {
 
         List<Map<String, Object>> weeks = new ArrayList<>();
         for (int number = 1; number <= weekCount; number++) {
-            weeks.add(weekSummary(term, number, rosterIds, classRecords));
+            weeks.add(SemesterAttendance.weekSummary(term, number, rosterIds, classRecords, null));
         }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> selectedWeek =
-                (Map<String, Object>) weeks.get(week - 1);
+        Map<String, Object> selectedWeek = weeks.get(week - 1);
 
-        long completedWeeks = weeks.stream()
-                .filter(row -> Boolean.TRUE.equals(row.get("complete")))
-                .count();
+        long completedWeeks = SemesterAttendance.completedWeeks(weeks);
         int markedThisWeek = Integer.parseInt(String.valueOf(selectedWeek.get("marked")));
         int totalStudents = roster.size();
         double semesterProgress = totalStudents == 0
                 ? 0
-                : round(completedWeeks * 100.0 / weekCount);
+                : SemesterAttendance.round(completedWeeks * 100.0 / weekCount);
         double weekProgress = totalStudents == 0
                 ? 0
-                : round(markedThisWeek * 100.0 / totalStudents);
+                : SemesterAttendance.round(markedThisWeek * 100.0 / totalStudents);
 
         @SuppressWarnings("unchecked")
         Map<String, String> statuses =
@@ -109,11 +103,7 @@ public class ClassAttendanceService {
         response.put("weekEnd", selectedWeek.get("endDate"));
         response.put("students", studentRows(roster));
         response.put("statuses", statuses);
-        response.put("weeks", weeks.stream().map(row -> {
-            Map<String, Object> copy = new LinkedHashMap<>(row);
-            copy.remove("statuses");
-            return copy;
-        }).toList());
+        response.put("weeks", SemesterAttendance.publicWeeks(weeks));
         response.put("totalStudents", totalStudents);
         response.put("completedWeeks", completedWeeks);
         response.put("semesterProgress", semesterProgress);
@@ -131,8 +121,8 @@ public class ClassAttendanceService {
         }
         Term term = terms.findById(termId)
                 .orElseThrow(() -> Errors.notFound("TERM_NOT_FOUND", "Term not found"));
-        int safeWeek = clamp(week == null ? 1 : week, 1, weekCount(term));
-        String attendanceDate = weekStartDate(term, safeWeek);
+        int safeWeek = clamp(week == null ? 1 : week, 1, SemesterAttendance.weekCount(term));
+        String attendanceDate = SemesterAttendance.weekStartDate(term, safeWeek);
 
         workflow.markAttendance(classId, attendanceDate, entries);
         return overview(classId, termId, safeWeek);
@@ -209,50 +199,6 @@ public class ClassAttendanceService {
         return studentIds.stream().map(byId::get).filter(Objects::nonNull).toList();
     }
 
-    private Map<String, Object> weekSummary(
-            Term term, int number, Set<UUID> rosterIds, List<AttendanceRecord> classRecords) {
-        String start = weekStartDate(term, number);
-        String end = weekEndDate(term, number);
-        Map<UUID, AttendanceRecord> byStudent = classRecords.stream()
-                .filter(row -> row.getAttendanceDate() != null)
-                .filter(row -> row.getAttendanceDate().compareTo(start) >= 0)
-                .filter(row -> row.getAttendanceDate().compareTo(end) <= 0)
-                .filter(row -> rosterIds.contains(row.getStudentId()))
-                .collect(Collectors.toMap(
-                        AttendanceRecord::getStudentId,
-                        row -> row,
-                        (first, second) -> first,
-                        LinkedHashMap::new));
-
-        long present = byStudent.values().stream()
-                .filter(row -> row.getStatus() == AttendanceRecord.Status.PRESENT).count();
-        long absent = byStudent.values().stream()
-                .filter(row -> row.getStatus() == AttendanceRecord.Status.ABSENT).count();
-        long excused = byStudent.values().stream()
-                .filter(row -> row.getStatus() == AttendanceRecord.Status.EXCUSED).count();
-        long late = byStudent.values().stream()
-                .filter(row -> row.getStatus() == AttendanceRecord.Status.LATE).count();
-        int marked = byStudent.size();
-        int total = rosterIds.size();
-        Map<String, String> statuses = new LinkedHashMap<>();
-        byStudent.forEach((studentId, row) -> statuses.put(studentId.toString(), row.getStatus().name()));
-
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("number", number);
-        summary.put("startDate", start);
-        summary.put("endDate", end);
-        summary.put("marked", marked);
-        summary.put("total", total);
-        summary.put("present", present);
-        summary.put("absent", absent);
-        summary.put("excused", excused);
-        summary.put("late", late);
-        summary.put("percent", total == 0 ? 0 : round(marked * 100.0 / total));
-        summary.put("complete", total > 0 && marked == total);
-        summary.put("statuses", statuses);
-        return summary;
-    }
-
     private List<Map<String, Object>> classOptions(List<SchoolClass> classes) {
         return classes.stream().map(row -> {
             Map<String, Object> option = new LinkedHashMap<>();
@@ -271,7 +217,7 @@ public class ClassAttendanceService {
             option.put("termOrder", row.getTermOrder());
             option.put("startDate", row.getStartDate());
             option.put("endDate", row.getEndDate());
-            option.put("numberOfWeeks", weekCount(row));
+            option.put("numberOfWeeks", SemesterAttendance.weekCount(row));
             option.put("status", row.getStatus().name());
             return option;
         }).toList();
@@ -290,44 +236,8 @@ public class ClassAttendanceService {
         }).toList();
     }
 
-    private int weekCount(Term term) {
-        return Math.max(1, term.getNumberOfWeeks());
-    }
-
-    private String weekStartDate(Term term, int week) {
-        return parseDate(term.getStartDate()).plusWeeks(week - 1L).toString();
-    }
-
-    private String weekEndDate(Term term, int week) {
-        LocalDate start = parseDate(term.getStartDate()).plusWeeks(week - 1L);
-        LocalDate end = start.plusDays(6);
-        if (term.getEndDate() != null && !term.getEndDate().isBlank()) {
-            try {
-                LocalDate termEnd = LocalDate.parse(term.getEndDate());
-                if (termEnd.isBefore(end)) {
-                    end = termEnd;
-                }
-            } catch (DateTimeParseException ignored) {
-                // A malformed end date must not break the register; use the full week.
-            }
-        }
-        return end.toString();
-    }
-
-    private LocalDate parseDate(String value) {
-        try {
-            return LocalDate.parse(value);
-        } catch (DateTimeParseException | NullPointerException ex) {
-            throw Errors.badRequest("INVALID_TERM_DATE", "Term needs a valid start date");
-        }
-    }
-
     private int clamp(int value, int min, int max) {
         return Math.min(max, Math.max(min, value));
-    }
-
-    private double round(double value) {
-        return Math.round(value * 10.0) / 10.0;
     }
 
     private String text(Object value) {

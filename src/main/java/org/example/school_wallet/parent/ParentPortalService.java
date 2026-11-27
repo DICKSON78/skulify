@@ -5,16 +5,21 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.example.school_wallet.academic.AttendanceRecord;
 import org.example.school_wallet.academic.Enrolment;
 import org.example.school_wallet.academic.FeeRecord;
 import org.example.school_wallet.academic.GradeRecord;
 import org.example.school_wallet.academic.SchoolClass;
+import org.example.school_wallet.academic.SemesterAttendance;
 import org.example.school_wallet.academic.Student;
 import org.example.school_wallet.academic.Subject;
+import org.example.school_wallet.academic.Term;
 import org.example.school_wallet.academic.TimetableEntry;
 import org.example.school_wallet.common.error.Errors;
 import org.example.school_wallet.operations.ParentLetter;
@@ -174,6 +179,7 @@ public class ParentPortalService {
             row.put("enrolmentDate", enrolment.getEnrolmentDate());
             return row;
         }).toList());
+        result.put("semesterAttendance", semesterAttendance(student, enrolments, classes));
 
         UUID classId = currentClassId(enrolments);
         List<TimetableEntry> timetable = classId == null ? List.of() : em.createQuery(
@@ -283,6 +289,120 @@ public class ParentPortalService {
         return result;
     }
 
+    private Map<String, Object> semesterAttendance(
+            Student student, List<Enrolment> enrolments, Map<UUID, String> classes) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        UUID classId = currentClassId(enrolments);
+        Term term = activeTerm();
+        int weekCount = term == null ? 0 : SemesterAttendance.weekCount(term);
+        String fallbackClass = text(student.getClassName());
+
+        result.put("className", classId == null
+                ? fallbackClass
+                : classes.getOrDefault(classId, fallbackClass));
+        result.put("termName", term == null ? "" : text(term.getName()));
+        result.put("numberOfWeeks", weekCount);
+        result.put("week", 0);
+        result.put("weekStart", "");
+        result.put("weekEnd", "");
+        result.put("completedWeeks", 0L);
+        result.put("semesterProgress", 0.0);
+        result.put("markedThisWeek", 0);
+        result.put("weekProgress", 0.0);
+        result.put("totalStudents", 0);
+        result.put("weeks", List.of());
+        result.put("student", SemesterAttendance.studentSummary(List.of()));
+
+        if (classId == null || term == null || weekCount == 0) {
+            return result;
+        }
+
+        Set<UUID> rosterIds = rosterIds(classId, term);
+        List<AttendanceRecord> classRecords = classRecords(classId);
+        List<Map<String, Object>> weeks = new ArrayList<>();
+        for (int number = 1; number <= weekCount; number++) {
+            weeks.add(SemesterAttendance.weekSummary(
+                    term, number, rosterIds, classRecords, student.getId()));
+        }
+
+        long completedWeeks = SemesterAttendance.completedWeeks(weeks);
+        // Show the child's latest recorded week first; fall back to the first
+        // incomplete register when the child has not been marked yet.
+        int selectedWeekNumber = 1;
+        boolean focusMarked = false;
+        for (Map<String, Object> week : weeks) {
+            if (!text(week.get("status")).isEmpty()) {
+                selectedWeekNumber = intValue(week.get("number"));
+                focusMarked = true;
+            }
+        }
+        if (!focusMarked) {
+            for (Map<String, Object> week : weeks) {
+                if (!Boolean.TRUE.equals(week.get("complete"))) {
+                    selectedWeekNumber = intValue(week.get("number"));
+                    break;
+                }
+            }
+        }
+        Map<String, Object> selectedWeek =
+                weeks.get(Math.min(weeks.size(), Math.max(1, selectedWeekNumber)) - 1);
+        int markedThisWeek = intValue(selectedWeek.get("marked"));
+        int totalStudents = rosterIds.size();
+        double semesterProgress = SemesterAttendance.round(completedWeeks * 100.0 / weekCount);
+        double weekProgress = totalStudents == 0
+                ? 0
+                : SemesterAttendance.round(markedThisWeek * 100.0 / totalStudents);
+
+        result.put("week", selectedWeekNumber);
+        result.put("weekStart", text(selectedWeek.get("startDate")));
+        result.put("weekEnd", text(selectedWeek.get("endDate")));
+        result.put("completedWeeks", completedWeeks);
+        result.put("semesterProgress", semesterProgress);
+        result.put("markedThisWeek", markedThisWeek);
+        result.put("weekProgress", weekProgress);
+        result.put("totalStudents", totalStudents);
+        result.put("weeks", SemesterAttendance.publicWeeks(weeks));
+        result.put("student", SemesterAttendance.studentSummary(weeks));
+        return result;
+    }
+
+    private Term activeTerm() {
+        List<Term> all = em.createQuery("select t from Term t", Term.class).getResultList();
+        return all.stream()
+                .filter(term -> term.getStatus() == Term.Status.ACTIVE)
+                .min(Comparator.comparingInt(Term::getTermOrder))
+                .orElseGet(() -> all.stream()
+                        .min(Comparator.comparingInt(Term::getTermOrder))
+                        .orElse(null));
+    }
+
+    private Set<UUID> rosterIds(UUID classId, Term term) {
+        List<Enrolment> rows = em.createQuery(
+                        "select e from Enrolment e where e.classId = :classId and e.status = :status",
+                        Enrolment.class)
+                .setParameter("classId", classId)
+                .setParameter("status", Enrolment.Status.ACTIVE)
+                .getResultList();
+        return rows.stream()
+                .filter(row -> term.getAcademicYearId() == null
+                        || term.getAcademicYearId().equals(row.getAcademicYearId()))
+                .map(Enrolment::getStudentId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private List<AttendanceRecord> classRecords(UUID classId) {
+        return em.createQuery(
+                        "select a from AttendanceRecord a where a.classId = :classId",
+                        AttendanceRecord.class)
+                .setParameter("classId", classId)
+                .getResultList();
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
     private Map<String, Object> attendanceSummary(List<AttendanceRecord> records) {
         int present = 0;
         int absent = 0;
@@ -308,5 +428,9 @@ public class ParentPortalService {
         result.put("rate", records.isEmpty() ? 0
                 : Math.round((present * 100.0 / records.size()) * 10.0) / 10.0);
         return result;
+    }
+
+    private String text(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 }

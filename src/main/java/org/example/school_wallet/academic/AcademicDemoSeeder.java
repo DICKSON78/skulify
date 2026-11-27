@@ -101,11 +101,11 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 term(id(year), "Term 1", 1, "2026-01-01", "2026-04-30", 16));
 
         seedOne("attendance", "remarks", "Demo attendance 1",
-                attendance(id(student1), "2026-11-18", "PRESENT", "08:05", "Demo attendance 1"));
+                attendance(id(class1), id(student1), "2026-01-01", "PRESENT", "08:05", "Demo attendance 1"));
         seedOne("attendance", "remarks", "Demo attendance 2",
-                attendance(id(student2), "2026-11-18", "LATE", "08:25", "Demo attendance 2"));
+                attendance(id(class1), id(student2), "2026-01-01", "LATE", "08:25", "Demo attendance 2"));
         seedOne("attendance", "remarks", "Demo attendance 3",
-                attendance(id(student3), "2026-11-18", "ABSENT", "", "Demo attendance 3"));
+                attendance(id(class2), id(student3), "2026-01-01", "ABSENT", "", "Demo attendance 3"));
 
         seedOne("grades", "remarks", "Demo grade 1",
                 grade(id(student1), id(subject1), "Mid-term", "TERM_1", 88, "A", "Demo grade 1"));
@@ -637,8 +637,14 @@ public class AcademicDemoSeeder implements ApplicationRunner {
     }
 
     private Map<String, Object> attendance(
-            String studentId, String date, String status, String checkIn, String remarks) {
+            String classId,
+            String studentId,
+            String date,
+            String status,
+            String checkIn,
+            String remarks) {
         return Map.of(
+                "classId", classId,
                 "studentId", studentId,
                 "attendanceDate", date,
                 "status", status,
