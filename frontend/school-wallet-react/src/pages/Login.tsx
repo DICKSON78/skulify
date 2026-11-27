@@ -87,7 +87,7 @@ export default function Login() {
 
     return (
         <>
-            {busy && <SystemPreloader message="Authenticating..." />}
+            {busy && <SystemPreloader />}
             {user ? signedInContent : (
             <div className="login-shell">
                 <div className="w-full max-w-[420px]">
