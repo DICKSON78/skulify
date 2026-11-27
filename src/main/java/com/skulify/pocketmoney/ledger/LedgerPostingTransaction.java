@@ -8,6 +8,8 @@ import com.skulify.pocketmoney.wallet.WalletStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -44,6 +46,7 @@ public class LedgerPostingTransaction {
     public LedgerResult post(LedgerPostingRequest request, String requestHash) {
         Map<UUID, PmWallet> lockedWallets = lockWallets(request.postings());
         Map<UUID, Long> balanceAfterByWallet = computeBalances(lockedWallets, request.postings());
+        enforceDailyPurchaseLimits(lockedWallets, request.postings());
 
         // The key is committed in this same transaction. A duplicate-key failure
         // rolls back the ledger rows and the cached balance together, so a
@@ -127,6 +130,34 @@ public class LedgerPostingTransaction {
                     wallets.put(id, wallet);
                 });
         return wallets;
+    }
+
+    private void enforceDailyPurchaseLimits(
+            Map<UUID, PmWallet> wallets, List<LedgerPosting> postings) {
+        Instant since = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC);
+        List<LedgerEntryType> spendingTypes = List.of(
+                LedgerEntryType.PURCHASE, LedgerEntryType.REFUND, LedgerEntryType.REVERSAL);
+        for (PmWallet wallet : wallets.values()) {
+            if (wallet.getDailyLimit() <= 0) {
+                continue;
+            }
+            long pending = postings.stream()
+                    .filter(posting -> wallet.getId().equals(posting.walletId()))
+                    .filter(posting -> posting.type() == LedgerEntryType.PURCHASE)
+                    .filter(posting -> posting.direction() == Direction.DEBIT)
+                    .mapToLong(LedgerPosting::amount)
+                    .sum();
+            if (pending <= 0) {
+                continue;
+            }
+            long spentToday = ledgerEntryRepository.sumDailySpend(
+                    wallet.getId(), since, spendingTypes, Direction.DEBIT);
+            if (addExact(spentToday, pending) > wallet.getDailyLimit()) {
+                throw new PocketMoneyException(
+                        PocketMoneyErrorCode.LIMIT_EXCEEDED,
+                        "Purchase exceeds the daily spending limit");
+            }
+        }
     }
 
     private Map<UUID, Long> computeBalances(

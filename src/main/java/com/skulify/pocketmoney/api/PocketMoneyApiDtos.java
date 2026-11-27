@@ -75,4 +75,65 @@ public final class PocketMoneyApiDtos {
             long difference,
             boolean healthy) {
     }
+
+    public record IssueCardRequest(UUID studentId, String cardUid) {
+    }
+
+    public record CardResponse(
+            UUID id,
+            UUID studentId,
+            UUID walletId,
+            String uid,
+            String status,
+            Instant issuedAt) {
+    }
+
+    public record MerchantRequest(String code, String name, String category) {
+    }
+
+    public record MerchantResponse(UUID id, String code, String name, String category) {
+    }
+
+    public record TerminalRequest(String merchantCode, String code, String deviceKey) {
+    }
+
+    public record TerminalResponse(
+            UUID id,
+            String code,
+            String merchantCode,
+            String status,
+            Instant lastSeenAt) {
+    }
+
+    public record PurchaseRequest(
+            UUID studentId,
+            String cardUid,
+            String terminalCode,
+            String deviceKey,
+            long amount,
+            String items,
+            boolean offline,
+            String nonce,
+            Instant requestTimestamp) {
+    }
+
+    public record PurchaseResponse(
+            UUID id,
+            UUID walletId,
+            UUID referenceId,
+            long amount,
+            String currency,
+            String status,
+            long balanceAfter,
+            boolean replayed,
+            String items,
+            Instant createdAt) {
+    }
+
+    public record WalletLimitsRequest(
+            Long dailyLimit,
+            Long weeklyLimit,
+            Long monthlyLimit,
+            Long perTransactionLimit) {
+    }
 }

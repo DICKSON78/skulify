@@ -5,6 +5,7 @@ import com.skulify.pocketmoney.api.PocketMoneyApiDtos.OpenWalletRequest;
 import com.skulify.pocketmoney.api.PocketMoneyApiDtos.ReconciliationResponse;
 import com.skulify.pocketmoney.api.PocketMoneyApiDtos.TopUpRequest;
 import com.skulify.pocketmoney.api.PocketMoneyApiDtos.TopUpResponse;
+import com.skulify.pocketmoney.api.PocketMoneyApiDtos.WalletLimitsRequest;
 import com.skulify.pocketmoney.api.PocketMoneyApiDtos.WalletResponse;
 import com.skulify.pocketmoney.common.PocketMoneyErrorCode;
 import com.skulify.pocketmoney.common.PocketMoneyException;
@@ -51,6 +52,7 @@ public class PocketMoneyApiService {
 
     private static final String TOPUP_REQUEST_SCOPE = "TOPUP_REQUEST";
     private static final String TOPUP_DECISION_SCOPE = "TOPUP_DECISION";
+    private static final String WALLET_LIMITS_SCOPE = "WALLET_LIMITS";
     private static final long DEFAULT_DAILY_LIMIT = 100_000L;
     private static final long DEFAULT_WEEKLY_LIMIT = 300_000L;
     private static final long DEFAULT_MONTHLY_LIMIT = 1_000_000L;
@@ -164,6 +166,43 @@ public class PocketMoneyApiService {
                 result.ledgerBalance(),
                 result.difference(),
                 result.healthy());
+    }
+
+    public WalletResponse updateLimits(
+            UUID walletId, WalletLimitsRequest request, String idempotencyKey) {
+        if (!accessPolicy.can("pocket-cards", Action.UPDATE)
+                && !accessPolicy.can("spending-limits", Action.UPDATE)) {
+            throw forbidden("Your role cannot change spending limits");
+        }
+        requireKey(idempotencyKey);
+        if (walletId == null || request == null) {
+            throw Errors.badRequest("CONTEXT_REQUIRED", "A wallet and limits are required");
+        }
+        PmWallet wallet = accessibleWallet(walletId);
+        long daily = request.dailyLimit() == null ? wallet.getDailyLimit() : request.dailyLimit();
+        long weekly = request.weeklyLimit() == null ? wallet.getWeeklyLimit() : request.weeklyLimit();
+        long monthly = request.monthlyLimit() == null ? wallet.getMonthlyLimit() : request.monthlyLimit();
+        long perTransaction = request.perTransactionLimit() == null
+                ? wallet.getPerTxnLimit()
+                : request.perTransactionLimit();
+        if (daily < 0 || weekly < 0 || monthly < 0 || perTransaction < 0) {
+            throw Errors.badRequest("INVALID_LIMITS", "Wallet limits cannot be negative");
+        }
+        String hash = RequestHashes.forWalletLimits(
+                wallet.getId(), daily, weekly, monthly, perTransaction, currentUser().id());
+        var existing = idempotencyKeyService.find(idempotencyKey);
+        if (existing.isPresent()) {
+            idempotencyKeyService.verify(existing.get(), WALLET_LIMITS_SCOPE, hash);
+            return toWalletResponse(wallet);
+        }
+        idempotencyKeys.save(idempotencyKeyService.newKey(
+                idempotencyKey, WALLET_LIMITS_SCOPE, hash, wallet.getId().toString()));
+        wallet.setDailyLimit(daily);
+        wallet.setWeeklyLimit(weekly);
+        wallet.setMonthlyLimit(monthly);
+        wallet.setPerTxnLimit(perTransaction);
+        wallet.setUpdatedAt(Instant.now());
+        return toWalletResponse(wallets.save(wallet));
     }
 
     /** Immediate top-up: money moves in the same transaction as the public record. */

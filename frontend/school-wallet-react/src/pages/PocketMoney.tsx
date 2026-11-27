@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
 import { FormCard, Notice, StatTile, money, text } from '../components/ModuleUi';
-import { api, operationsApi } from '../lib/api';
+import { api, pocketMoneyApi } from '../lib/api';
 
 type Row = Record<string, unknown>;
 
@@ -44,10 +44,15 @@ type Balance = {
 const message = (reason: unknown): string =>
     reason instanceof Error ? reason.message : 'Request failed';
 
+const idem = (): string =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const statusTone = (status: string): string => {
-    if (status === 'PENDING') return 'badge-warning';
-    if (status === 'POSTED') return 'badge-success';
-    if (status === 'FAILED') return 'badge-danger';
+    if (status === 'PENDING' || status === 'OFFLINE_PENDING') return 'badge-warning';
+    if (status === 'POSTED' || status === 'SUCCESS' || status === 'APPROVED') return 'badge-success';
+    if (status === 'FAILED' || status === 'DECLINED') return 'badge-danger';
     if (status === 'REVERSED') return 'badge-info';
     return 'badge-primary';
 };
@@ -235,13 +240,15 @@ export default function PocketMoney() {
     const [cardId, setCardId] = useState('');
     const [balance, setBalance] = useState<Balance | null>(null);
     const [transactions, setTransactions] = useState<Row[]>([]);
+    const [topupList, setTopupList] = useState<Row[]>([]);
+    const [purchaseList, setPurchaseList] = useState<Row[]>([]);
     const [amount, setAmount] = useState('');
     const [reference, setReference] = useState('');
     const [daily, setDaily] = useState('');
     const [weekly, setWeekly] = useState('');
     const [monthly, setMonthly] = useState('');
-    const [category, setCategory] = useState('');
     const [terminalCode, setTerminalCode] = useState('');
+    const [terminalKey, setTerminalKey] = useState('SKULIFY-DEMO-SENSOR-KEY');
     const [itemId, setItemId] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [receipt, setReceipt] = useState<Row | null>(null);
@@ -256,23 +263,22 @@ export default function PocketMoney() {
             })
             .catch(() => undefined);
         if (posAllowed) {
-            api.list<Row>('store-terminals', 0, 100, '')
-                .then((page) => {
-                    const active = page.content.filter((row) => text(row.status) === 'ACTIVE');
+            pocketMoneyApi.terminals<Row[]>()
+                .then((rows) => {
+                    const active = rows.filter((row) => text(row.status) === 'ACTIVE');
                     setTerminals(active);
-                    setTerminalCode((current) => current || active[0]?.code?.toString() || '');
+                    setTerminalCode((current) => current || text(active[0]?.code));
                 })
                 .catch(() => undefined);
         }
     }, [posAllowed]);
 
     const loadCards = useCallback(() => {
-        api.list<Row>('pocket-cards', 0, 100, '')
-            .then((page) => {
-                setCards(page.content);
-                const preferred = page.content.find((row) => text(row.status) === 'ACTIVE')
-                    ?? page.content[0];
-                setCardId((current) => current || preferred?.id?.toString() || '');
+        pocketMoneyApi.cards<Row[]>()
+            .then((rows) => {
+                setCards(rows);
+                const preferred = rows.find((row) => text(row.status) === 'ACTIVE') ?? rows[0];
+                setCardId((current) => current || text(preferred?.id));
             })
             .catch((reason) => setError(message(reason)));
         api.list<Row>('students', 0, 100, '')
@@ -281,22 +287,84 @@ export default function PocketMoney() {
     }, []);
 
     const loadCard = useCallback((id: string) => {
-        if (!id) {
+        const selected = cards.find((row) => text(row.id) === id);
+        if (!selected || !text(selected.studentId) || !text(selected.walletId)) {
             return;
         }
+        const studentId = text(selected.studentId);
+        const walletId = text(selected.walletId);
         Promise.all([
-            operationsApi.pocketBalance<Balance>(id),
-            operationsApi.cardTransactions<Row[]>(id),
+            pocketMoneyApi.wallet<Row>(studentId),
+            pocketMoneyApi.ledger<Row[]>(walletId),
+            pocketMoneyApi.topUps<Row[]>(studentId),
+            pocketMoneyApi.purchases<Row[]>(studentId),
         ])
-            .then(([summary, history]) => {
-                setBalance(summary);
-                setTransactions(history);
-                setDaily(String(summary.dailyLimit ?? 0));
-                setWeekly(String(summary.weeklyLimit ?? 0));
-                setMonthly(String(summary.monthlyLimit ?? 0));
+            .then(([wallet, ledger, topUps, purchases]) => {
+                const spent = (since: Date): number => ledger
+                    .filter((entry) => new Date(text(entry.createdAt)) >= since)
+                    .reduce((total, entry) => {
+                        const value = Number(entry.amount ?? 0);
+                        if (text(entry.type) === 'PURCHASE') return total + value;
+                        if (text(entry.type) === 'REFUND' || text(entry.type) === 'REVERSAL') {
+                            return total - value;
+                        }
+                        return total;
+                    }, 0);
+                const now = new Date();
+                const startDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startWeek = new Date(startDay);
+                startWeek.setDate(startWeek.getDate() - ((startWeek.getDay() + 6) % 7));
+                const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+                setBalance({
+                    balance: Number(wallet.balance ?? 0),
+                    dailyLimit: Number(wallet.dailyLimit ?? 0),
+                    weeklyLimit: Number(wallet.weeklyLimit ?? 0),
+                    monthlyLimit: Number(wallet.monthlyLimit ?? 0),
+                    spentToday: Math.max(0, spent(startDay)),
+                    spentThisWeek: Math.max(0, spent(startWeek)),
+                    spentThisMonth: Math.max(0, spent(startMonth)),
+                });
+                setDaily(String(wallet.dailyLimit ?? 0));
+                setWeekly(String(wallet.weeklyLimit ?? 0));
+                setMonthly(String(wallet.monthlyLimit ?? 0));
+
+                setTransactions(ledger.map((entry, index) => ({
+                    id: entry.id,
+                    reference: `PM-${index + 1}`,
+                    type: text(entry.type),
+                    status: 'POSTED',
+                    category: text(entry.accountCode),
+                    amount: Number(entry.amount ?? 0),
+                    balanceAfter: Number(entry.balanceAfter ?? 0),
+                    description: `${text(entry.accountCode)} → ${text(entry.counterAccountCode)}`,
+                    createdAt: entry.createdAt,
+                })));
+                setTopupList(topUps.map((row, index) => ({
+                    id: row.id,
+                    reference: text(row.providerReference) || `TOP-${index + 1}`,
+                    type: 'TOPUP',
+                    status: text(row.status),
+                    amount: Number(row.grossAmount ?? 0),
+                    balanceAfter: row.balanceAfter == null ? undefined : Number(row.balanceAfter),
+                    category: text(row.provider),
+                    description: `${text(row.status)} top-up via ${text(row.provider)}`,
+                    createdAt: row.createdAt,
+                })));
+                setPurchaseList(purchases.map((row, index) => ({
+                    id: row.id,
+                    reference: `POS-${index + 1}`,
+                    type: 'PURCHASE',
+                    status: text(row.status),
+                    amount: Number(row.amount ?? 0),
+                    balanceAfter: Number(row.balanceAfter ?? 0),
+                    category: text(row.items) || 'Sensor purchase',
+                    description: text(row.items) || 'Sensor payment',
+                    createdAt: row.createdAt,
+                })));
             })
             .catch((reason) => setError(message(reason)));
-    }, []);
+    }, [cards]);
 
     useEffect(() => {
         loadCards();
@@ -325,14 +393,24 @@ export default function PocketMoney() {
         setError('');
         setSuccess('');
         try {
-            const result = await operationsApi.posCharge<Row>({
-                cardUid: text(selectedCard?.cardUid),
+            const result = await pocketMoneyApi.purchase<Row>(idem(), {
+                studentId: text(selectedCard?.studentId),
+                cardUid: text(selectedCard?.uid),
                 terminalCode,
-                storeItemId: itemId,
-                quantity: Number(quantity),
+                deviceKey: terminalKey,
+                amount: chargeTotal,
+                items: text(selectedItem?.name) || 'Sensor purchase',
+                offline: false,
+                nonce: idem(),
+                requestTimestamp: new Date().toISOString(),
             });
-            setReceipt(result);
-            setSuccess('Sensor payment approved. Card balance and stock updated.');
+            setReceipt({
+                reference: 'Sensor receipt',
+                amount: Number(result.amount ?? chargeTotal),
+                balanceAfter: Number(result.balanceAfter ?? 0),
+                type: 'PURCHASE',
+            });
+            setSuccess('Sensor payment approved and posted to the Pocket Money ledger.');
             setQuantity('1');
             loadCard(cardId);
             loadSupporting();
@@ -346,8 +424,10 @@ export default function PocketMoney() {
         setError('');
         setSuccess('');
         try {
-            await operationsApi.pushUssdTopUp(cardId, {
-                amount,
+            await pocketMoneyApi.requestTopUp(idem(), {
+                studentId: text(selectedCard?.studentId),
+                amount: Number(amount),
+                provider: 'USSD',
                 providerReference: reference,
             });
             setSuccess('PUSH USSD sent to the parent phone. Approve it to load the child card.');
@@ -364,9 +444,9 @@ export default function PocketMoney() {
         setSuccess('');
         try {
             if (approve) {
-                await operationsApi.approveTopUp(transactionId);
+                await pocketMoneyApi.approveTopUp(transactionId, idem());
             } else {
-                await operationsApi.declineTopUp(transactionId);
+                await pocketMoneyApi.declineTopUp(transactionId, idem());
             }
             setSuccess(
                 approve
@@ -389,12 +469,10 @@ export default function PocketMoney() {
     const activeTerminals = terminals.filter((row) => text(row.status) === 'ACTIVE');
     const selectedItem = items.find((row) => text(row.id) === itemId);
     const chargeTotal = Number(selectedItem?.price ?? 0) * (Number(quantity) || 0);
-    const latestPurchase = transactions.find((row) => text(row.type) === 'PURCHASE');
-    const pendingTopups = transactions.filter(
-        (row) => text(row.type) === 'TOPUP' && text(row.status) === 'PENDING',
-    );
-    const topupRows = transactions.filter((row) => text(row.type) === 'TOPUP');
-    const purchaseRows = transactions.filter((row) => text(row.type) === 'PURCHASE');
+    const latestPurchase = purchaseList[0];
+    const pendingTopups = topupList.filter((row) => text(row.status) === 'PENDING');
+    const topupRows = topupList;
+    const purchaseRows = purchaseList;
     const lastTap = latestPurchase?.createdAt
         ? new Date(String(latestPurchase.createdAt)).toLocaleTimeString([], {
             hour: '2-digit',
@@ -405,7 +483,7 @@ export default function PocketMoney() {
 
     const card = (
         <BankCard
-            uid={text(selectedCard?.cardUid) || 'SKUL-NFC-0001'}
+            uid={text(selectedCard?.uid) || 'SKUL-NFC-0001'}
             balanceValue={money(balance?.balance)}
             account={studentName}
             status={text(selectedCard?.status) || 'ACTIVE'}
@@ -435,7 +513,7 @@ export default function PocketMoney() {
                         <option value="">Choose a student card...</option>
                         {cards.map((row) => (
                             <option key={text(row.id)} value={text(row.id)}>
-                                {text(row.cardUid)} · balance {money(row.balance)}
+                                {text(row.uid)} · {text(row.status)}
                             </option>
                         ))}
                     </select>
@@ -576,10 +654,11 @@ export default function PocketMoney() {
                                     onClick={() =>
                                         void run(
                                             () =>
-                                                operationsApi.topUp(cardId, {
-                                                    amount,
+                                                pocketMoneyApi.topUp(idem(), {
+                                                    studentId: text(selectedCard?.studentId),
+                                                    amount: Number(amount),
+                                                    provider: 'DIRECT',
                                                     providerReference: reference,
-                                                    category: 'TOPUP',
                                                 }),
                                             'Top-up recorded. The child can now use the card at the store.',
                                         )
@@ -656,10 +735,6 @@ export default function PocketMoney() {
                                     <input className="form-input w-full" type="number" min="0" value={monthly} onChange={(event) => setMonthly(event.target.value)} />
                                 </label>
                             </div>
-                            <label className="block mt-3">
-                                <span className="form-label">Category (optional, e.g. SNACKS)</span>
-                                <input className="form-input w-full" value={category} onChange={(event) => setCategory(event.target.value)} />
-                            </label>
                             <div className="pocket-meter-grid mt-4">
                                 <LimitMeter label="Daily" spent={balance?.spentToday} limit={balance?.dailyLimit} />
                                 <LimitMeter label="Weekly" spent={balance?.spentThisWeek} limit={balance?.weeklyLimit} />
@@ -680,12 +755,15 @@ export default function PocketMoney() {
                                 onClick={() =>
                                     void run(
                                         () =>
-                                            operationsApi.setLimits(cardId, {
-                                                category,
-                                                dailyLimit: daily,
-                                                weeklyLimit: weekly,
-                                                monthlyLimit: monthly,
-                                            }),
+                                            pocketMoneyApi.updateLimits(
+                                                text(selectedCard?.walletId),
+                                                idem(),
+                                                {
+                                                    dailyLimit: Number(daily),
+                                                    weeklyLimit: Number(weekly),
+                                                    monthlyLimit: Number(monthly),
+                                                },
+                                            ),
                                         'Spending limits updated.',
                                     )
                                 }
@@ -705,12 +783,12 @@ export default function PocketMoney() {
                                     Tap the student card on the reader, or enter its UID below. The sensor posts
                                     the purchase to the same Haba bank ledger.
                                 </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                                     <label className="block">
                                         <span className="form-label">Card UID (sensor tap)</span>
                                         <input
                                             className="form-input w-full font-mono"
-                                            value={text(selectedCard?.cardUid)}
+                                            value={text(selectedCard?.uid)}
                                             readOnly
                                             placeholder="SKUL-NFC-0001"
                                         />
@@ -721,7 +799,7 @@ export default function PocketMoney() {
                                             <option value="">Choose terminal...</option>
                                             {activeTerminals.map((terminal) => (
                                                 <option key={text(terminal.id)} value={text(terminal.code)}>
-                                                    {text(terminal.code)} · {text(terminal.location)}
+                                                    {text(terminal.code)} · {text(terminal.merchantCode)}
                                                 </option>
                                             ))}
                                         </select>
@@ -741,6 +819,15 @@ export default function PocketMoney() {
                                         <span className="form-label">Quantity</span>
                                         <input className="form-input w-full" type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
                                     </label>
+                                    <label className="block">
+                                        <span className="form-label">Sensor device key</span>
+                                        <input
+                                            className="form-input w-full font-mono"
+                                            value={terminalKey}
+                                            onChange={(event) => setTerminalKey(event.target.value)}
+                                            placeholder="SKULIFY-DEMO-SENSOR-KEY"
+                                        />
+                                    </label>
                                 </div>
                                 <div className="pocket-charge-row">
                                     <div>
@@ -749,7 +836,7 @@ export default function PocketMoney() {
                                     </div>
                                     <button
                                         type="button"
-                                        disabled={!selectedCard || !terminalCode || !itemId || chargeTotal <= 0}
+                                        disabled={!selectedCard || !terminalCode || !terminalKey || !itemId || chargeTotal <= 0}
                                         onClick={() => void charge()}
                                         className="btn-primary"
                                     >

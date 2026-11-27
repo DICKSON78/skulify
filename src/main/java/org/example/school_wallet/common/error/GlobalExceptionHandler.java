@@ -87,7 +87,10 @@ public class GlobalExceptionHandler {
     private HttpStatus pocketMoneyStatus(PocketMoneyErrorCode code) {
         return switch (code) {
             case INVALID_AMOUNT, IDEMPOTENCY_REQUIRED -> HttpStatus.BAD_REQUEST;
-            case WALLET_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case WALLET_NOT_FOUND, CARD_NOT_FOUND, MERCHANT_NOT_FOUND,
+                    TERMINAL_NOT_FOUND, PURCHASE_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case WALLET_FROZEN, CARD_BLOCKED, CARD_NOT_ACTIVE, TERMINAL_NOT_ACTIVE,
+                    DEVICE_KEY_INVALID -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.CONFLICT;
         };
     }

@@ -263,6 +263,32 @@ class WalletLedgerServiceTest {
     }
 
     @Test
+    void dailySpendingLimitIsEnforcedUnderTheWalletLock() {
+        PmWallet wallet = openWallet(1_000L, 1_000L);
+        walletService.topUp(new TopUpCommand(
+                wallet.getId(), 5_000L, UUID.randomUUID(), key("topup-daily"), UUID.randomUUID()));
+
+        walletService.purchase(new PurchaseCommand(
+                wallet.getId(), 1_000L, UUID.randomUUID(), UUID.randomUUID(),
+                key("daily-first"), UUID.randomUUID()));
+
+        long todaysSpend = ledgerEntryRepository.sumDailySpend(
+                wallet.getId(),
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC).atStartOfDay().toInstant(java.time.ZoneOffset.UTC),
+                List.of(LedgerEntryType.PURCHASE, LedgerEntryType.REFUND, LedgerEntryType.REVERSAL),
+                Direction.DEBIT);
+        assertEquals(1_000L, todaysSpend);
+
+        PocketMoneyException failure = assertThrows(PocketMoneyException.class, () ->
+                walletService.purchase(new PurchaseCommand(
+                        wallet.getId(), 1_000L, UUID.randomUUID(), UUID.randomUUID(),
+                        key("daily-second"), UUID.randomUUID())));
+        assertEquals(PocketMoneyErrorCode.LIMIT_EXCEEDED, failure.code());
+        assertEquals(3_900L, walletRepository.findById(wallet.getId()).orElseThrow().getBalance());
+        assertEquals(3_900L, ledgerEntryRepository.sumSignedByWallet(wallet.getId()));
+    }
+
+    @Test
     void unbalancedDoubleEntryPostingIsRejectedAndKeyIsNotStored() {
         UUID tenant = newTenant("UNBAL-" + shortId());
         UUID reference = UUID.randomUUID();

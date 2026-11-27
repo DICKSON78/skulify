@@ -1,5 +1,6 @@
 package com.skulify.pocketmoney.ledger;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,4 +24,19 @@ public interface LedgerEntryRepository extends JpaRepository<PmLedgerEntry, UUID
             where wallet_id = :walletId
             """, nativeQuery = true)
     long sumSignedByWallet(@Param("walletId") UUID walletId);
+
+    /** Today's net card spending, with refunds reducing the total. */
+    @Query("""
+            select coalesce(sum(case when e.direction = :debit
+                then e.amount else -e.amount end), 0)
+            from PmLedgerEntry e
+            where e.walletId = :walletId
+              and e.createdAt >= :since
+              and e.type in :types
+            """)
+    long sumDailySpend(
+            @Param("walletId") UUID walletId,
+            @Param("since") Instant since,
+            @Param("types") List<LedgerEntryType> types,
+            @Param("debit") Direction debit);
 }

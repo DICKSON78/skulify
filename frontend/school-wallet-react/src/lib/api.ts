@@ -283,6 +283,31 @@ export const pocketMoneyApi = {
         }),
     reconciliation: <T>(walletId: string) =>
         request<T>(`/pocket-money/reconciliation/${walletId}`),
+    cards: <T>() => request<T>('/pocket-money/cards'),
+    issueCard: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/cards', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    merchants: <T>() => request<T>('/pocket-money/merchants'),
+    terminals: <T>() => request<T>('/pocket-money/terminals'),
+    purchases: <T>(studentId?: string) => {
+        const query = studentId ? `?studentId=${encodeURIComponent(studentId)}` : '';
+        return request<T>(`/pocket-money/purchases${query}`);
+    },
+    purchase: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/purchases', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    updateLimits: <T>(walletId: string, key: string, body: Record<string, unknown>) =>
+        request<T>(`/pocket-money/wallets/${walletId}/limits`, {
+            method: 'PUT',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
 };
 
 /** Domain actions that sit alongside the generic /api/v1/{resource} CRUD surface. */

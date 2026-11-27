@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -169,11 +170,7 @@ public class WalletService {
         requireKey(command.idempotencyKey());
 
         PmWallet wallet = walletById(command.walletId());
-        Map<String, String> metadata = Map.of(
-                "merchantId", String.valueOf(command.merchantId()),
-                "terminalId", String.valueOf(command.terminalId()),
-                "businessFingerprint",
-                        "walletId=" + wallet.getId() + "|amount=" + command.amount());
+        Map<String, String> metadata = purchaseMetadata(wallet, command);
         UUID reference = deterministicReference("PURCHASE", command.idempotencyKey());
         LedgerPostingRequest replayProbe = new LedgerPostingRequest(
                 command.idempotencyKey(),
@@ -241,6 +238,36 @@ public class WalletService {
         long postedAmount = postedAmount(
                 result, LedgerEntryType.PURCHASE, AccountCode.STUDENT_WALLET, fallbackAmount);
         return new PurchaseResult(result.referenceId(), postedAmount, balanceAfter, result.replayed());
+    }
+
+    private Map<String, String> purchaseMetadata(PmWallet wallet, PurchaseCommand command) {
+        Map<String, String> metadata = new HashMap<>();
+        putIfPresent(metadata, "merchantId", command.merchantId());
+        putIfPresent(metadata, "terminalId", command.terminalId());
+        putIfPresent(metadata, "cardId", command.cardId());
+        putIfPresent(metadata, "cardUidHash", command.cardUidHash());
+        putIfPresent(metadata, "terminalCode", command.terminalCode());
+        putIfPresent(metadata, "nonce", command.nonce());
+        putIfPresent(metadata, "itemsFingerprint", command.itemsFingerprint());
+        putIfPresent(metadata, "requestTimestamp", command.requestTimestamp());
+        metadata.put("offline", String.valueOf(command.offline()));
+        metadata.put("businessFingerprint", "walletId=" + wallet.getId()
+                + "|amount=" + command.amount()
+                + "|cardUidHash=" + nullToEmpty(command.cardUidHash())
+                + "|terminalId=" + nullToEmpty(command.terminalId())
+                + "|nonce=" + nullToEmpty(command.nonce())
+                + "|offline=" + command.offline());
+        return Map.copyOf(metadata);
+    }
+
+    private void putIfPresent(Map<String, String> metadata, String name, Object value) {
+        if (value != null) {
+            metadata.put(name, value.toString());
+        }
+    }
+
+    private String nullToEmpty(Object value) {
+        return value == null ? "" : value.toString();
     }
 
     private long postedAmount(

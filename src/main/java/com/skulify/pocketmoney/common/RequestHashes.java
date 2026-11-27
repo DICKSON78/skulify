@@ -101,6 +101,56 @@ public final class RequestHashes {
                 approved ? "APPROVE" : "DECLINE"));
     }
 
+    public static String forCardIssue(
+            UUID tenantId, UUID studentId, UUID walletId, String uidHash, UUID createdBy) {
+        return sha256(String.join("|",
+                "CARD_ISSUE",
+                nullSafe(tenantId),
+                nullSafe(studentId),
+                nullSafe(walletId),
+                nullSafe(uidHash),
+                nullSafe(createdBy)));
+    }
+
+    public static String forMerchant(
+            UUID tenantId, String code, String name, String category, UUID createdBy) {
+        return sha256(String.join("|",
+                "MERCHANT",
+                nullSafe(tenantId),
+                nullSafe(code),
+                nullSafe(name),
+                nullSafe(category),
+                nullSafe(createdBy)));
+    }
+
+    public static String forTerminal(
+            UUID tenantId, UUID merchantId, String code, String deviceKeyHash, UUID createdBy) {
+        return sha256(String.join("|",
+                "TERMINAL",
+                nullSafe(tenantId),
+                nullSafe(merchantId),
+                nullSafe(code),
+                nullSafe(deviceKeyHash),
+                nullSafe(createdBy)));
+    }
+
+    public static String forWalletLimits(
+            UUID walletId,
+            long dailyLimit,
+            long weeklyLimit,
+            long monthlyLimit,
+            long perTxnLimit,
+            UUID actor) {
+        return sha256(String.join("|",
+                "WALLET_LIMITS",
+                nullSafe(walletId),
+                Long.toString(dailyLimit),
+                Long.toString(weeklyLimit),
+                Long.toString(monthlyLimit),
+                Long.toString(perTxnLimit),
+                nullSafe(actor)));
+    }
+
     private static String nullSafe(Object value) {
         return value == null ? "" : value.toString();
     }

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.skulify.pocketmoney.common.PocketMoneyHashes;
 import org.example.school_wallet.common.tenant.TenantContext;
 import org.example.school_wallet.config.SchoolBootstrapSeeder;
 import org.example.school_wallet.operations.SchoolDocumentStorage;
@@ -28,6 +29,9 @@ import org.springframework.stereotype.Component;
 @Order(2)
 @ConditionalOnProperty(name = "app.bootstrap.enabled", havingValue = "true")
 public class AcademicDemoSeeder implements ApplicationRunner {
+
+    /** Demo-only sensor secret. Production keys are registered through the API. */
+    static final String DEMO_DEVICE_KEY = "SKULIFY-DEMO-SENSOR-KEY";
 
     private final CrudService crud;
     private final JdbcTemplate jdbc;
@@ -53,6 +57,7 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         Map<String, Object> student3 = seedOne("students", "studentCode",
                 "DEMO-STU-003", student("DEMO-STU-003", "Neema", "Kato", "Form 2B", "LAB_PREFECT"));
         seedPocketWallet(student1);
+        seedPocketCredentials(student1);
 
         Map<String, Object> teacher1 = seedOne("teachers", "employeeCode",
                 "DEMO-EMP-001", teacher("DEMO-EMP-001", "Mary", "Sharma", "Mathematics"));
@@ -365,6 +370,55 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 SchoolTenants.DEMO_SCHOOL_ID,
                 studentId,
                 studentId);
+    }
+
+    /** Seeds the ledger-backed card, merchant and sensor used by demo purchases. */
+    private void seedPocketCredentials(Map<String, Object> student) {
+        UUID studentId = UUID.fromString(id(student));
+        UUID walletId = PocketMoneyHashes.deterministicId("WALLET", studentId.toString());
+        UUID merchantId = PocketMoneyHashes.deterministicId("MERCHANT", "DEMO-CANTEEN");
+        UUID cardId = PocketMoneyHashes.deterministicId("CARD", "SKUL-NFC-0001");
+        UUID terminalId = PocketMoneyHashes.deterministicId("TERMINAL", "POS-CANTEEN-01");
+
+        jdbc.update(
+                """
+                insert into pm_merchants
+                    (id, tenant_id, code, name, category, status, settlement_account_code,
+                     created_at, updated_at)
+                select ?, ?, 'DEMO-CANTEEN', 'Demo school canteen', 'SNACKS', 'ACTIVE',
+                       'SHOP_SETTLEMENT', current_timestamp, current_timestamp
+                where not exists (select 1 from pm_merchants where id = ?)
+                """,
+                merchantId, SchoolTenants.DEMO_SCHOOL_ID, merchantId);
+
+        jdbc.update(
+                """
+                insert into pm_cards
+                    (id, tenant_id, wallet_id, uid_hash, uid_label, status, issued_at,
+                     created_at, updated_at)
+                select ?, ?, ?, ?, 'SKUL-NFC-0001', 'ACTIVE', current_timestamp,
+                       current_timestamp, current_timestamp
+                where not exists (select 1 from pm_cards where id = ?)
+                """,
+                cardId,
+                SchoolTenants.DEMO_SCHOOL_ID,
+                walletId,
+                PocketMoneyHashes.identifier("SKUL-NFC-0001"),
+                cardId);
+
+        jdbc.update(
+                """
+                insert into pm_terminals
+                    (id, tenant_id, merchant_id, code, device_key_hash, status,
+                     created_at, updated_at)
+                select ?, ?, ?, 'POS-CANTEEN-01', ?, 'ACTIVE', current_timestamp, current_timestamp
+                where not exists (select 1 from pm_terminals where id = ?)
+                """,
+                terminalId,
+                SchoolTenants.DEMO_SCHOOL_ID,
+                merchantId,
+                PocketMoneyHashes.identifier(DEMO_DEVICE_KEY),
+                terminalId);
     }
 
     private String id(Map<String, Object> record) {

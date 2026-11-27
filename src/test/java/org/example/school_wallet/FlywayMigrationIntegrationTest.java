@@ -138,6 +138,8 @@ class FlywayMigrationIntegrationTest {
             assertTrue(columnExists(connection, "attendance_records", "class_id"));
             assertTrue(columnExists(connection, "grade_records", "teacher_id"));
             assertTrue(columnExists(connection, "terms", "number_of_weeks"));
+            assertTrue(columnExists(connection, "pm_cards", "uid_label"));
+            assertTrue(columnExists(connection, "pm_purchases", "balance_after"));
         }
     }
 
