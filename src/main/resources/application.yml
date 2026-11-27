@@ -2,7 +2,7 @@ spring:
   application:
     name: skulify
   datasource:
-    url: jdbc:h2:mem:school_wallet;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
+    url: jdbc:h2:mem:school_wallet;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false;LOCK_TIMEOUT=10000
     username: sa
     password: password
     hikari:
@@ -34,6 +34,14 @@ spring:
 
 server:
   port: 8085
+
+skulify:
+  pocket-money:
+    topup-fee-percent: 0.02
+    offline-cap: 10000
+    refund-window-minutes: 30
+    daily-cash-limit: 50000
+    reconciliation-cron: '0 30 2 * * *'
 
 management:
   endpoints:

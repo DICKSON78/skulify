@@ -22,6 +22,14 @@ server:
   port: ${SERVER_PORT:8085}
   forward-headers-strategy: framework
 
+skulify:
+  pocket-money:
+    topup-fee-percent: ${PM_TOPUP_FEE_PERCENT:0.02}
+    offline-cap: ${PM_OFFLINE_CAP:10000}
+    refund-window-minutes: ${PM_REFUND_WINDOW_MINUTES:30}
+    daily-cash-limit: ${PM_DAILY_CASH_LIMIT:50000}
+    reconciliation-cron: ${PM_RECONCILIATION_CRON:0 30 2 * * *}
+
 management:
   endpoints:
     web:
