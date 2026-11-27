@@ -75,6 +75,32 @@ public final class RequestHashes {
                 Long.toString(command.perTxnLimit())));
     }
 
+    /** Fingerprint for a pending parent-approved top-up request. */
+    public static String forTopUpRequest(
+            UUID tenantId,
+            UUID studentId,
+            UUID parentUserId,
+            long grossAmount,
+            String provider,
+            String providerReference) {
+        return sha256(String.join("|",
+                "TOPUP_REQUEST",
+                nullSafe(tenantId),
+                nullSafe(studentId),
+                nullSafe(parentUserId),
+                Long.toString(grossAmount),
+                nullSafe(provider),
+                nullSafe(providerReference)));
+    }
+
+    /** Fingerprint for approving or declining a specific pending top-up. */
+    public static String forTopUpDecision(UUID topUpId, boolean approved) {
+        return sha256(String.join("|",
+                "TOPUP_DECISION",
+                nullSafe(topUpId),
+                approved ? "APPROVE" : "DECLINE"));
+    }
+
     private static String nullSafe(Object value) {
         return value == null ? "" : value.toString();
     }

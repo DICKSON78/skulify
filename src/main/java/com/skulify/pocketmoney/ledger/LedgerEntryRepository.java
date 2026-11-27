@@ -10,6 +10,8 @@ public interface LedgerEntryRepository extends JpaRepository<PmLedgerEntry, UUID
 
     List<PmLedgerEntry> findByReferenceIdOrderByCreatedAtAsc(UUID referenceId);
 
+    List<PmLedgerEntry> findByWalletIdOrderByCreatedAtAsc(UUID walletId);
+
     List<PmLedgerEntry> findByIdempotencyKeyOrderByCreatedAtAsc(String idempotencyKey);
 
     boolean existsByIdempotencyKey(String idempotencyKey);

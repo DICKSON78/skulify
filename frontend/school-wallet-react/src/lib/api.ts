@@ -242,6 +242,49 @@ export const classAttendanceApi = {
         request<T>('/class-attendance', withBody('POST', body)),
 };
 
+/** Ledger-backed Pocket Money API used by the newer money flows. */
+export const pocketMoneyApi = {
+    wallet: <T>(studentId: string) => request<T>(`/pocket-money/wallets/student/${studentId}`),
+    ledger: <T>(walletId: string) => request<T>(`/pocket-money/wallets/${walletId}/ledger`),
+    topUps: <T>(studentId?: string, walletId?: string) => {
+        const params = new URLSearchParams();
+        if (studentId) params.set('studentId', studentId);
+        if (walletId) params.set('walletId', walletId);
+        const query = params.toString();
+        return request<T>(`/pocket-money/topups${query ? `?${query}` : ''}`);
+    },
+    openWallet: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/wallets', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    topUp: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/topups', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    requestTopUp: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/topups/request', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    approveTopUp: <T>(id: string, key: string) =>
+        request<T>(`/pocket-money/topups/${id}/approve`, {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+        }),
+    declineTopUp: <T>(id: string, key: string) =>
+        request<T>(`/pocket-money/topups/${id}/decline`, {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+        }),
+    reconciliation: <T>(walletId: string) =>
+        request<T>(`/pocket-money/reconciliation/${walletId}`),
+};
+
 /** Domain actions that sit alongside the generic /api/v1/{resource} CRUD surface. */
 export const operationsApi = {
     feeSummary: <T>() => request<T>('/fee-management/summary'),

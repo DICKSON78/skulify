@@ -39,7 +39,8 @@ public class SecurityConfig {
                 origins == null || origins.isEmpty() ? List.of("http://localhost:5173") : origins);
         configuration.setAllowedMethods(
                 Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization", "Content-Type", "X-Tenant-Id", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

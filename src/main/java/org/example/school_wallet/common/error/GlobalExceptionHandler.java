@@ -1,5 +1,7 @@
 package org.example.school_wallet.common.error;
 
+import com.skulify.pocketmoney.common.PocketMoneyErrorCode;
+import com.skulify.pocketmoney.common.PocketMoneyException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.HashMap;
@@ -12,6 +14,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -29,6 +32,11 @@ public class GlobalExceptionHandler {
         return problem(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
     }
 
+    @ExceptionHandler(PocketMoneyException.class)
+    public ProblemDetail handlePocketMoney(PocketMoneyException ex, HttpServletRequest request) {
+        return problem(pocketMoneyStatus(ex.code()), ex.code().name(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         Map<String, String> errors = new HashMap<>();
@@ -44,6 +52,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
+            MissingRequestHeaderException.class,
             MissingServletRequestParameterException.class,
             IllegalArgumentException.class
     })
@@ -73,6 +82,14 @@ public class GlobalExceptionHandler {
                 "INTERNAL_ERROR",
                 "An unexpected error occurred",
                 request);
+    }
+
+    private HttpStatus pocketMoneyStatus(PocketMoneyErrorCode code) {
+        return switch (code) {
+            case INVALID_AMOUNT, IDEMPOTENCY_REQUIRED -> HttpStatus.BAD_REQUEST;
+            case WALLET_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            default -> HttpStatus.CONFLICT;
+        };
     }
 
     private ProblemDetail problem(HttpStatus status, String code, String detail, HttpServletRequest request) {

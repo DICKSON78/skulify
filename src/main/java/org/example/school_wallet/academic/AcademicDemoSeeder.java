@@ -52,6 +52,7 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 "DEMO-STU-002", student("DEMO-STU-002", "Juma", "Ali", "Form 1A", "LIBRARY_PREFECT"));
         Map<String, Object> student3 = seedOne("students", "studentCode",
                 "DEMO-STU-003", student("DEMO-STU-003", "Neema", "Kato", "Form 2B", "LAB_PREFECT"));
+        seedPocketWallet(student1);
 
         Map<String, Object> teacher1 = seedOne("teachers", "employeeCode",
                 "DEMO-EMP-001", teacher("DEMO-EMP-001", "Mary", "Sharma", "Mathematics"));
@@ -343,6 +344,27 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         return crud.list(resource, 0, 1, "").content().stream()
                 .findFirst()
                 .orElseGet(() -> crud.create(resource, body));
+    }
+
+    /** Gives the demo student a ledger-backed wallet so the Pocket Money API is usable. */
+    private void seedPocketWallet(Map<String, Object> student) {
+        UUID studentId = UUID.fromString(id(student));
+        UUID walletId = UUID.nameUUIDFromBytes(
+                ("WALLET|" + studentId).getBytes(StandardCharsets.UTF_8));
+        jdbc.update(
+                """
+                insert into pm_wallets
+                    (id, tenant_id, student_id, account_code, currency, balance, status,
+                     daily_limit, weekly_limit, monthly_limit, per_txn_limit, version,
+                     created_at, updated_at)
+                select ?, ?, ?, 'STUDENT_WALLET', 'TZS', 0, 'ACTIVE',
+                       100000, 300000, 1000000, 50000, 0, current_timestamp, current_timestamp
+                where not exists (select 1 from pm_wallets where student_id = ?)
+                """,
+                walletId,
+                SchoolTenants.DEMO_SCHOOL_ID,
+                studentId,
+                studentId);
     }
 
     private String id(Map<String, Object> record) {
