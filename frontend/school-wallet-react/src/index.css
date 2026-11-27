@@ -1435,10 +1435,9 @@ a { color: inherit; }
   width: 76px;
   height: 76px;
   margin: 0 auto 18px;
-  border-radius: 22px;
-  color: var(--primary-dark);
-  background: var(--primary-light);
-  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: #FFFFFF;
+  background: #0B3A8C;
   animation: preloaderPulse 1.2s ease-in-out infinite;
 }
 
