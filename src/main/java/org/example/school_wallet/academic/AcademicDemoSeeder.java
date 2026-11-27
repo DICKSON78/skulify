@@ -49,9 +49,9 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         Map<String, Object> student1 = seedOne("students", "studentCode",
                 "DEMO-STU-001", student("DEMO-STU-001", "Asha", "Mwangi", "Form 1A", "PREFECT"));
         Map<String, Object> student2 = seedOne("students", "studentCode",
-                "DEMO-STU-002", student("DEMO-STU-002", "Juma", "Ali", "Form 1A", "LIBRARIAN"));
+                "DEMO-STU-002", student("DEMO-STU-002", "Juma", "Ali", "Form 1A", "LIBRARY_PREFECT"));
         Map<String, Object> student3 = seedOne("students", "studentCode",
-                "DEMO-STU-003", student("DEMO-STU-003", "Neema", "Kato", "Form 2B", "LAB_TECHNICIAN"));
+                "DEMO-STU-003", student("DEMO-STU-003", "Neema", "Kato", "Form 2B", "LAB_PREFECT"));
 
         Map<String, Object> teacher1 = seedOne("teachers", "employeeCode",
                 "DEMO-EMP-001", teacher("DEMO-EMP-001", "Mary", "Sharma", "Mathematics"));

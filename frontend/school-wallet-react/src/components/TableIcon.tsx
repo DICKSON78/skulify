@@ -31,6 +31,7 @@ const EXACT_ICONS: Record<string, IconName> = {
     'employment type': 'UserList',
     'employee type': 'UserList',
     'student position': 'Medal',
+    'student role': 'Medal',
     'admission date': 'CalendarPlus',
     'date of birth': 'CalendarBlank',
     'hire date': 'CalendarPlus',
@@ -153,7 +154,7 @@ const VALUE_ICONS: Array<[(value: string) => boolean, IconName]> = [
     ],
     [(value) => ['LATE'].includes(value), 'Clock'],
     [
-        (value) => ['PREFECT', 'LIBRARIAN', 'LAB_TECHNICIAN'].includes(value),
+        (value) => ['PREFECT', 'LIBRARY_PREFECT', 'LAB_PREFECT'].includes(value),
         'Medal',
     ],
     [

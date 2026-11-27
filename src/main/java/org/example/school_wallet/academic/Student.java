@@ -90,7 +90,7 @@ public class Student extends TenantOwnedEntity {
 
     public enum Gender { MALE, FEMALE }
 
-    public enum StudentPosition { NONE, PREFECT, LIBRARIAN, LAB_TECHNICIAN }
+    public enum StudentPosition { NONE, PREFECT, LIBRARY_PREFECT, LAB_PREFECT }
 
     public enum Status { ACTIVE, INACTIVE, GRADUATED, SUSPENDED }
 }
