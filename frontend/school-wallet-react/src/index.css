@@ -1463,8 +1463,7 @@ a { color: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .system-preloader-card,
-  .system-preloader-mark {
+  .system-preloader-card {
     animation: none;
   }
 }
@@ -2480,5 +2479,10 @@ button,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The auth preloader logo must shake even when the OS requests reduced motion. */
+  .system-preloader-mark {
+    animation: preloaderShake 0.7s ease-in-out infinite !important;
   }
 }
