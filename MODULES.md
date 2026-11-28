@@ -237,7 +237,7 @@ Admins and registrars own planning and result actions; teachers may upload marks
 | --- | --- | --- |
 | `/pocket-money` | `PocketMoney.tsx` | Select child card, top up, set limits, view ledger |
 | `/library-desk` | `LibraryDesk.tsx` | Issue/return/renew books, reserve, book lab time |
-| `/store-pos` | `StorePos.tsx` | Scan card UID, choose terminal and item, charge, view receipt |
+| `/store-pos` | `RetailStorePos.tsx` | Scan card UID, choose terminal and item, charge, view the 80 mm thermal-style receipt |
 | `/operations-hub` | `OperationsHub.tsx` | Summary, quick links, approve requests, complete tasks |
 | `/timetable-generator` | `TimetableGenerator.tsx` | Choose class, days, and periods; generate a clash-free timetable |
 | `/marks-upload` | `MarksUpload.tsx` | Download/fill/upload the marks template, direct bulk entry, ranking and parent-letter summaries |
@@ -328,7 +328,7 @@ Migration `V13__retail_engine.sql` adds retail suppliers, batches, stock movemen
 | `GET` | `/api/v1/retail/sales` | List sales (`studentId`, `limit`) |
 | `GET` | `/api/v1/retail/sales/{id}` | Sale detail |
 | `GET` | `/api/v1/retail/sales/{id}/receipt` | Receipt JSON |
-| `GET` | `/api/v1/retail/sales/{id}/receipt/print` | Printable receipt |
+| `GET` | `/api/v1/retail/sales/{id}/receipt/print` | 80 mm thermal-style printable receipt |
 | `POST` | `/api/v1/retail/sales/{id}/return` | Idempotent refund/return |
 | `POST` | `/api/v1/retail/stock/restock` | Manual restock batch |
 | `POST` | `/api/v1/retail/stock/adjust` | Stock adjustment with reason |
@@ -352,4 +352,5 @@ Migration `V13__retail_engine.sql` adds retail suppliers, batches, stock movemen
 - `npm --prefix frontend/school-wallet-react run build` — passed; hashed assets synced to `src/main/resources/static/`.
 - Docker local stack — `skulify-app` and `skulify-postgres` healthy, Flyway history through `V13`, no host Postgres port.
 - API smoke — sale/replay/receipt/return/reconciliation/wallet ledger verified; replay returns the stored response without a second debit.
+- Receipt design check — the on-screen slip and print HTML mirror the POS reference: 80 mm white slip, centered Skulify mark/name/date/`SALES RECEIPT`, dashed metadata rules, `qty x unit` item lines, dotted separators, large `TOTAL TZS`, payment/balance block, and thank-you footer. The verification sale was returned through the normal refund flow and the wallet balance still equals the signed ledger sum.
 - Playwright UI check — all six Store & Inventory routes return `200`, no console/page errors, no visible UUIDs, sidebar contains exactly the six expected labels, PWA remains `skulify-v17`, and `/api/`/`/actuator/` bypass the service worker. A superadmin-specific check confirms the school switcher, `X-Tenant-Id` header, and successful POS preview.

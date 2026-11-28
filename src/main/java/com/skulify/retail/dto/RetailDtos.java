@@ -85,8 +85,9 @@ public final class RetailDtos {
             UUID id, String code, String merchantCode, String status, Instant lastSeenAt) {}
 
     public record ReceiptResponse(
-            String receiptNo, String reference, Instant createdAt, String studentName,
-            String cardUid, String merchantCode, String terminalCode,
-            long subtotal, long discount, long total, String currency, String status,
+            String receiptNo, String reference, Instant createdAt, String schoolName,
+            String cashier, String studentName, String cardUid, String merchantCode,
+            String terminalCode, long subtotal, long discount, long total,
+            String currency, String status, String paymentMethod, long balanceAfter,
             List<SaleItemResponse> items, List<ReturnResponse> refunds) {}
 }

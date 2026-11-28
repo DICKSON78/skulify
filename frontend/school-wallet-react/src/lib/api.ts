@@ -463,6 +463,7 @@ export const retailApi = {
         target.document.write(html);
         target.document.close();
         target.focus();
+        target.print();
     },
     returnSale: <T = RetailRow>(id: string, key: string, body: Record<string, unknown>) =>
         request<T>(`/retail/sales/${encodeURIComponent(id)}/return`, retailWrite(body, key)),

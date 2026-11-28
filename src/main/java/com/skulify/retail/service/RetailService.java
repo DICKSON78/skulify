@@ -85,6 +85,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -108,6 +110,7 @@ import org.example.school_wallet.security.AuthenticatedUser;
 import org.example.school_wallet.user.AppUserRepository;
 import org.example.school_wallet.security.CurrentUser;
 import org.example.school_wallet.security.ResourceAccessPolicy;
+import org.example.school_wallet.tenant.TenantRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -136,6 +139,7 @@ public class RetailService {
     private final WalletRepository wallets;
     private final StudentRepository students;
     private final AppUserRepository users;
+    private final TenantRepository tenants;
     private final PocketMoneyPurchaseService pocketMoneyPurchaseService;
     private final WalletService walletService;
     private final ResourceAccessPolicy accessPolicy;
@@ -163,6 +167,7 @@ public class RetailService {
             WalletRepository wallets,
             StudentRepository students,
             AppUserRepository users,
+            TenantRepository tenants,
             PocketMoneyPurchaseService pocketMoneyPurchaseService,
             WalletService walletService,
             ResourceAccessPolicy accessPolicy,
@@ -187,6 +192,7 @@ public class RetailService {
         this.wallets = wallets;
         this.students = students;
         this.users = users;
+        this.tenants = tenants;
         this.pocketMoneyPurchaseService = pocketMoneyPurchaseService;
         this.walletService = walletService;
         this.accessPolicy = accessPolicy;
@@ -332,10 +338,18 @@ public class RetailService {
         List<ReturnResponse> saleRefunds = refunds.findByTenantIdAndSaleIdOrderByCreatedAtAsc(tenantId(), sale.getId())
                 .stream().map(r -> new ReturnResponse(sale.getId(), r.getId(), r.getAmount(), 0L, false, r.getStatus().name(), r.getCreatedAt()))
                 .toList();
+        String schoolName = tenants.findById(sale.getTenantId())
+                .map(tenant -> tenant.getName())
+                .orElse("Skulify");
+        String cashier = sale.getCreatedBy() == null ? "" : users.findById(sale.getCreatedBy())
+                .map(user -> user.getFullName())
+                .orElse("");
         return new ReceiptResponse(
                 sale.getReceiptNo(),
                 sale.getReference(),
                 sale.getCreatedAt(),
+                schoolName,
+                cashier,
                 studentName(sale.getStudentId()),
                 cardLabel(sale.getCardId()),
                 merchantCode(sale.getMerchantId()),
@@ -345,6 +359,8 @@ public class RetailService {
                 sale.getTotal(),
                 "TZS",
                 sale.getStatus().name(),
+                receiptPaymentMethod(sale.getPaymentMethod()),
+                saleBalanceAfter(sale),
                 items.stream().map(this::toSaleItemResponse).toList(),
                 saleRefunds);
     }
@@ -352,29 +368,81 @@ public class RetailService {
     @Transactional(readOnly = true)
     public String receiptHtml(UUID id) {
         ReceiptResponse receipt = receipt(id);
+        List<SaleItemResponse> items = receipt.items() == null ? List.of() : receipt.items();
         StringBuilder html = new StringBuilder();
         html.append("<!doctype html><html><head><meta charset='utf-8'><title>Receipt ")
                 .append(escape(receipt.receiptNo()))
-                .append("</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#10233d;}h1{font-size:20px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{padding:8px;border-bottom:1px solid #d8e0ea;text-align:left;font-size:14px;} .totals{margin-top:16px;width:280px;margin-left:auto;} .totals div{display:flex;justify-content:space-between;padding:4px 0;}</style></head><body>");
-        html.append("<h1>Skulify Receipt</h1>");
-        html.append("<div>Receipt: ").append(escape(receipt.receiptNo())).append("</div>");
-        html.append("<div>Reference: ").append(escape(receipt.reference())).append("</div>");
-        html.append("<div>Student: ").append(escape(receipt.studentName())).append("</div>");
-        html.append("<div>Card: ").append(escape(receipt.cardUid())).append("</div>");
-        html.append("<div>Terminal: ").append(escape(receipt.terminalCode())).append("</div>");
-        html.append("<div>Status: ").append(escape(receipt.status())).append("</div>");
-        html.append("<table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>");
-        for (SaleItemResponse item : receipt.items()) {
-            html.append("<tr><td>").append(escape(item.name())).append("</td><td>")
-                    .append(item.quantity()).append("</td><td>TZS ")
-                    .append(item.unitPrice()).append("</td><td>TZS ")
-                    .append(item.lineTotal()).append("</td></tr>");
+                .append("</title><style>");
+        html.append("@page{size:80mm ")
+                .append(String.format(Locale.ROOT, "%.1fmm", receiptPageHeight(receipt)))
+                .append(";margin:0}");
+        html.append("html,body{margin:0;padding:0;background:#fff}");
+        html.append("body{font-family:'DejaVu Sans Mono','Courier New',monospace;color:#000;font-size:8.4pt;line-height:1.45;width:72mm;margin:0 auto;padding:5mm 0 6mm;page-break-inside:avoid}");
+        html.append(".logowrap{text-align:center;margin-bottom:2mm}.logo{width:30mm;height:10mm}");
+        html.append(".name{font-family:Arial,'Helvetica Neue',sans-serif;font-size:12.5pt;font-weight:700;line-height:1.25}");
+        html.append(".sm{font-size:7.4pt}.center{text-align:center}.right{text-align:right}");
+        html.append(".dash{border-top:.3mm dashed #000;margin:1.6mm 0}");
+        html.append(".dots{border-top:.7mm dotted #000;margin:2.4mm 0}");
+        html.append(".dt{border-top:.25mm dotted #888;margin:.8mm 0 .6mm}");
+        html.append("table{width:100%;border-collapse:collapse}td{padding:.6mm 0;vertical-align:top}");
+        html.append(".row td{padding:1mm 0}.tot td{font-size:11.5pt;font-weight:700;padding:1mm 0}");
+        html.append("@media print{body{padding:0}}");
+        html.append("</style></head><body>");
+
+        html.append("<div class='logowrap'><svg class='logo' viewBox='0 0 256 128' xmlns='http://www.w3.org/2000/svg' aria-hidden='true'>")
+                .append("<path d='M128 12 6 64l122 52 122-52L128 12Z' fill='#000'/>")
+                .append("<path d='M50 80v26c0 20 35 34 78 34s78-14 78-34V80l-78 34-78-34Z' fill='#000'/>")
+                .append("<path d='M230 64v40' stroke='#000' stroke-width='8' stroke-linecap='round'/>")
+                .append("<circle cx='230' cy='110' r='6' fill='#000'/></svg></div>");
+        html.append("<div class='center name'>Skulify</div>");
+        html.append("<div class='center sm'>").append(escape(receipt.schoolName())).append("</div>");
+        html.append("<div class='center sm'>School store")
+                .append(receipt.merchantCode() == null || receipt.merchantCode().isBlank()
+                        ? "" : " &middot; " + escape(receipt.merchantCode()))
+                .append("</div>");
+        html.append("<div class='center sm'>").append(escape(receiptTimestamp(receipt.createdAt()))).append("</div>");
+        html.append("<div class='center'><strong>SALES RECEIPT</strong></div>");
+        html.append("<div class='dash'></div>");
+        appendReceiptMeta(html, "Receipt No", receipt.receiptNo());
+        appendReceiptMeta(html, "Student", receipt.studentName());
+        appendReceiptMeta(html, "Card", receipt.cardUid());
+        appendReceiptMeta(html, "Terminal", receipt.terminalCode());
+        appendReceiptMeta(html, "Served by", receipt.cashier());
+        if (receipt.reference() != null && !receipt.reference().isBlank()
+                && !receipt.reference().equals(receipt.receiptNo())) {
+            appendReceiptMeta(html, "Ref", receipt.reference());
         }
-        html.append("</tbody></table><div class='totals'>");
-        html.append("<div><span>Subtotal</span><span>TZS ").append(receipt.subtotal()).append("</span></div>");
-        html.append("<div><span>Discount</span><span>TZS ").append(receipt.discount()).append("</span></div>");
-        html.append("<div><strong>Total</strong><strong>TZS ").append(receipt.total()).append("</strong></div>");
-        html.append("</div></body></html>");
+        html.append("<div class='dash'></div>");
+
+        if (items.isEmpty()) {
+            html.append("<div class='center sm'>No line items on this receipt.</div>");
+        }
+        for (SaleItemResponse item : items) {
+            html.append("<table><tr><td><strong>").append(escape(item.name())).append("</strong></td>")
+                    .append("<td class='right sm'>").append(item.quantity()).append(" each x ")
+                    .append(moneyText(item.unitPrice())).append("</td></tr>")
+                    .append("<tr><td></td><td class='right'><strong>")
+                    .append(moneyText(item.lineTotal())).append("</strong></td></tr></table>");
+            html.append("<div class='dt'></div>");
+        }
+
+        html.append("<table><tr><td>Subtotal</td><td class='right'>")
+                .append(moneyText(receipt.subtotal())).append("</td></tr>");
+        if (receipt.discount() > 0) {
+            html.append("<tr><td>-Discount</td><td class='right'>")
+                    .append(moneyText(receipt.discount())).append("</td></tr>");
+        }
+        html.append("</table><div class='dots'></div>");
+        html.append("<table><tr class='tot'><td>TOTAL ").append(escape(receipt.currency()))
+                .append("</td><td class='right'>").append(moneyText(receipt.total()))
+                .append("</td></tr></table><div class='dots'></div>");
+        html.append("<table><tr><td>Payment</td><td class='right'>")
+                .append(escape(receipt.paymentMethod())).append("</td></tr>")
+                .append("<tr><td>Balance after</td><td class='right'>TZS ")
+                .append(moneyText(receipt.balanceAfter())).append("</td></tr></table>");
+        html.append("<div class='dash'></div>");
+        html.append("<div class='center'><strong>Thank you for your business!</strong></div>");
+        html.append("<div class='center sm'>Powered by Skulify</div></body></html>");
         return html.toString();
     }
 
@@ -1669,6 +1737,49 @@ public class RetailService {
     private String escape(String value) {
         if (value == null) return "";
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private void appendReceiptMeta(StringBuilder html, String label, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        html.append("<div class='row'><table><tr><td>").append(escape(label))
+                .append(":</td><td class='right'>").append(escape(value))
+                .append("</td></tr></table></div>");
+    }
+
+    private String receiptTimestamp(Instant value) {
+        if (value == null) {
+            return "";
+        }
+        return DateTimeFormatter.ofPattern("EEE, d MMM yyyy, HH:mm", Locale.ENGLISH)
+                .withZone(ZoneId.of("Africa/Dar_es_Salaam"))
+                .format(value);
+    }
+
+    private String moneyText(long amount) {
+        return String.format(Locale.ROOT, "%,d", amount);
+    }
+
+    private String receiptPaymentMethod(String method) {
+        if (method == null || method.isBlank() || "POCKET_MONEY".equalsIgnoreCase(method)) {
+            return "Pocket money card";
+        }
+        return method.replace('_', ' ');
+    }
+
+    private double receiptPageHeight(ReceiptResponse receipt) {
+        double height = 124;
+        int wrappedLines = 0;
+        if (receipt.items() != null) {
+            for (SaleItemResponse item : receipt.items()) {
+                height += 15;
+                int nameLength = item.name() == null ? 0 : item.name().length();
+                wrappedLines += Math.max(0, (nameLength + 33) / 34 - 1);
+            }
+        }
+        height += wrappedLines * 4.3;
+        return Math.min(260.0, Math.max(118.0, Math.round(height * 10) / 10.0));
     }
 
     private long multiplyExact(long a, int b) {

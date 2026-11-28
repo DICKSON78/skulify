@@ -2765,6 +2765,87 @@ a { color: inherit; }
   background: var(--card);
 }
 
+/* Receipt: compact thermal-slip preview inside the POS modal. */
+.receipt-modal-backdrop { background: rgba(0, 0, 0, 0.6); }
+.retail-modal-card.receipt-modal-card { max-width: 512px; box-shadow: none !important; }
+.receipt-modal-header { padding: 16px 20px 12px; background: #fff; }
+.receipt-modal-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.receipt-modal-body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px;
+  background: #f8fafc;
+}
+.receipt-modal-footer { justify-content: stretch; gap: 8px; padding: 16px; }
+.receipt-modal-footer button { flex: 1 1 0; }
+.receipt-modal-footer .btn-primary { border-radius: 999px; }
+
+.receipt-paper {
+  width: 320px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 16px 14px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.receipt-logo { display: flex; justify-content: center; margin-bottom: 6px; color: #000; }
+.receipt-shop {
+  text-align: center;
+  color: #000;
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.receipt-contact,
+.receipt-date { text-align: center; font-size: 10px; }
+.receipt-date { margin-top: 4px; }
+.receipt-title { margin-top: 4px; text-align: center; font-weight: 700; letter-spacing: 0.3pt; }
+.receipt-rule { height: 0; font-size: 0; }
+.receipt-rule.dash { margin: 8px 0; border-top: 1px dashed #000; }
+.receipt-rule.dot { margin: 5px 0 3px; border-top: 1px dotted #999; }
+.receipt-rule.dots { margin: 10px 0; border-top: 2px dotted #000; }
+.receipt-meta-row,
+.receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+.receipt-meta-row strong,
+.receipt-total-row strong { text-align: right; font-weight: 700; }
+.receipt-item { padding-top: 3px; }
+.receipt-item-name { font-weight: 700; }
+.receipt-item-qty { text-align: right; font-size: 10px; color: #222; }
+.receipt-item-total { text-align: right; font-weight: 700; }
+.receipt-total-row.grand { padding: 4px 0; font-size: 14px; font-weight: 700; }
+.receipt-thanks { margin-top: 8px; text-align: center; font-weight: 700; }
+.receipt-powered { text-align: center; font-size: 10px; }
+.receipt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
 @media (max-width: 1100px) {
   .retail-workbench { grid-template-columns: 1fr; }
   .retail-cart-panel { position: static; }
@@ -2778,6 +2859,16 @@ a { color: inherit; }
   .retail-product-grid { grid-template-columns: 1fr 1fr; }
   .retail-modal-footer { flex-direction: column-reverse; }
   .retail-modal-footer button { width: 100%; }
+
+  .receipt-modal-backdrop { padding: 0; place-items: end center; }
+  .retail-modal-card.receipt-modal-card {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+  }
+  .receipt-paper { width: 100%; }
+  .receipt-modal-footer { flex-direction: row; flex-wrap: wrap; }
+  .receipt-modal-footer button { width: auto; flex: 1 1 30%; }
 }
 
 /* Flat interaction surfaces: no button glow, card lifts or card shadows. */

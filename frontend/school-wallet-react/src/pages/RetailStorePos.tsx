@@ -22,6 +22,25 @@ const message = (reason: unknown): string =>
 
 const num = (value: unknown): number => Number(value) || 0;
 
+const slipMoney = (value: unknown): string =>
+    num(value).toLocaleString('en-TZ');
+
+const slipDate = (value: unknown): string => {
+    if (!value) return '';
+    const date = new Date(text(value));
+    if (Number.isNaN(date.getTime())) return text(value);
+    return date.toLocaleString('en-GB', {
+        timeZone: 'Africa/Dar_es_Salaam',
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
+};
+
 const asRows = (value: unknown): Row[] => {
     if (Array.isArray(value)) {
         return value.filter((entry): entry is Row => Boolean(entry) && typeof entry === 'object');
@@ -34,13 +53,6 @@ const asRows = (value: unknown): Row[] => {
         }
     }
     return [];
-};
-
-const statusTone = (status: string): string => {
-    if (['COMPLETED', 'PAID', 'POSTED', 'APPROVED'].includes(status)) return 'badge-success';
-    if (['PENDING', 'PARTIAL', 'PARTIALLY_RECEIVED'].includes(status)) return 'badge-warning';
-    if (['CANCELLED', 'REFUNDED', 'RETURNED', 'FAILED'].includes(status)) return 'badge-danger';
-    return 'badge-info';
 };
 
 const studentName = (row: Row | undefined): string => {
@@ -208,7 +220,7 @@ export default function RetailStorePos() {
             return;
         }
         retailApi.receipt<Row>(id)
-            .then(setReceipt)
+            .then((detail) => setReceipt({ ...sale, ...detail, id }))
             .catch(() => setReceipt(sale));
     };
 
@@ -243,7 +255,16 @@ export default function RetailStorePos() {
                 nonce,
                 requestTimestamp,
             });
-            setReceipt(result);
+            let detailed: Row = result;
+            if (text(result.id)) {
+                try {
+                    const receiptDetail = await retailApi.receipt<Row>(text(result.id));
+                    detailed = { ...result, ...receiptDetail, id: text(result.id) };
+                } catch {
+                    detailed = result;
+                }
+            }
+            setReceipt(detailed);
             setSuccess(Boolean(result.replayed)
                 ? 'This checkout was already recorded. The original receipt is shown.'
                 : 'Sale posted to the Pocket Money ledger and stock updated.');
@@ -651,50 +672,66 @@ export default function RetailStorePos() {
             </div>
 
             {receipt && (
-                <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeReceipt(); }}>
-                    <div className="modal-card retail-modal-card" role="dialog" aria-modal="true" aria-label="Sale receipt">
-                        <div className="retail-modal-header">
-                            <h2 className="retail-panel-title">
-                                <span className="icon-tile"><Icon name="Receipt" size={18} /></span>
-                                Receipt · {text(receipt.receiptNo ?? receipt.reference) || 'Sale'}
+                <div className="modal-backdrop receipt-modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeReceipt(); }}>
+                    <div className="modal-card retail-modal-card receipt-modal-card" role="dialog" aria-modal="true" aria-label="Sale receipt">
+                        <div className="retail-modal-header receipt-modal-header">
+                            <h2 className="receipt-modal-title">
+                                Receipt {text(receipt.receiptNo ?? receipt.reference) || 'Sale'}
                             </h2>
                             <button type="button" className="modal-close" onClick={closeReceipt} aria-label="Close receipt"><Icon name="X" size={18} /></button>
                         </div>
-                        <div className="retail-modal-body">
-                            <div className="retail-keyval-grid">
-                                <div className="retail-keyval"><span>Status</span><strong><span className={`badge ${statusTone(text(receipt.status))}`}>{text(receipt.status) || 'COMPLETED'}</span></strong></div>
-                                <div className="retail-keyval"><span>Total</span><strong>{money(receipt.total ?? receipt.amount)}</strong></div>
-                                <div className="retail-keyval"><span>Balance after</span><strong>{money(receipt.balanceAfter)}</strong></div>
-                                <div className="retail-keyval"><span>Payment</span><strong>{text(receipt.paymentMethod) || 'POCKET_MONEY'}</strong></div>
-                                <div className="retail-keyval"><span>Student</span><strong>{studentName(students.find((row) => text(row.id) === text(receipt.studentId)))}</strong></div>
-                            </div>
-                            <div className="re-table-wrap mt-4">
-                                <table className="re-table">
-                                    <thead>
-                                        <tr>
-                                            <th><span className="table-col"><TableIcon label="Item" /><span>Item</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Quantity" /><span>Qty</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Unit price" /><span>Unit price</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Line total" /><span>Line total</span></span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {receiptLines.map((line, index) => (
-                                            <tr key={index}>
-                                                <td><div className="table-cell-content"><TableIcon label="Item" value={line.name} /><span className="min-w-0"><strong className="block text-gray-900">{text(line.name) || 'Product'}</strong><span className="text-xs text-gray-400">{text(line.sku)}</span></span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Quantity" value={line.quantity} /><span className="min-w-0">{text(line.quantity)}</span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Unit price" value={line.unitPrice} /><span className="min-w-0">{money(line.unitPrice)}</span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Line total" value={line.lineTotal} /><span className="min-w-0 font-semibold">{money(line.lineTotal)}</span></div></td>
-                                            </tr>
-                                        ))}
-                                        {receiptLines.length === 0 && (
-                                            <TableEmptyState colSpan={4} icon="Receipt" message="No line items on this receipt." />
-                                        )}
-                                    </tbody>
-                                </table>
+                        <div className="retail-modal-body receipt-modal-body">
+                            <div className="receipt-paper">
+                                <div className="receipt-logo"><Icon name="GraduationCap" size={34} /></div>
+                                <div className="receipt-shop">Skulify</div>
+                                <div className="receipt-contact">{text(receipt.schoolName) || 'School store'}</div>
+                                <div className="receipt-contact">
+                                    School store{text(receipt.merchantCode) ? ` · ${text(receipt.merchantCode)}` : ''}
+                                </div>
+                                <div className="receipt-date">{slipDate(receipt.createdAt)}</div>
+                                <div className="receipt-title">SALES RECEIPT</div>
+                                <div className="receipt-rule dash" />
+
+                                <div className="receipt-meta-row"><span>Receipt No:</span><strong>{text(receipt.receiptNo ?? receipt.reference) || '—'}</strong></div>
+                                <div className="receipt-meta-row"><span>Student:</span><strong>{text(receipt.studentName) || studentName(students.find((row) => text(row.id) === text(receipt.studentId)))}</strong></div>
+                                <div className="receipt-meta-row"><span>Card:</span><strong>{text(receipt.cardUid ?? receipt.uid) || '—'}</strong></div>
+                                <div className="receipt-meta-row"><span>Terminal:</span><strong>{text(receipt.terminalCode) || '—'}</strong></div>
+                                {text(receipt.cashier) && <div className="receipt-meta-row"><span>Served by:</span><strong>{text(receipt.cashier)}</strong></div>}
+                                <div className="receipt-rule dash" />
+
+                                {receiptLines.map((line, index) => (
+                                    <div className="receipt-item" key={text(line.saleItemId ?? line.id ?? line.sku) || index}>
+                                        <div className="receipt-item-name">{text(line.name) || 'Product'}</div>
+                                        <div className="receipt-item-qty">{text(line.quantity)} each x {slipMoney(line.unitPrice)}</div>
+                                        <div className="receipt-item-total">{slipMoney(line.lineTotal)}</div>
+                                        <div className="receipt-rule dot" />
+                                    </div>
+                                ))}
+                                {receiptLines.length === 0 && (
+                                    <div className="receipt-empty">
+                                        <Icon name="Receipt" size={20} />
+                                        <span>No line items on this receipt.</span>
+                                    </div>
+                                )}
+
+                                <div className="receipt-rule dash" />
+                                <div className="receipt-total-row"><span>Subtotal</span><strong>{slipMoney(receipt.subtotal)}</strong></div>
+                                {num(receipt.discount) > 0 && (
+                                    <div className="receipt-total-row"><span>-Discount</span><strong>{slipMoney(receipt.discount)}</strong></div>
+                                )}
+                                <div className="receipt-rule dots" />
+                                <div className="receipt-total-row grand"><span>TOTAL TZS</span><strong>{slipMoney(receipt.total ?? receipt.amount)}</strong></div>
+                                <div className="receipt-rule dots" />
+                                <div className="receipt-total-row"><span>Payment</span><strong>{text(receipt.paymentMethod) || 'Pocket money card'}</strong></div>
+                                {receipt.balanceAfter !== undefined && receipt.balanceAfter !== null && (
+                                    <div className="receipt-total-row"><span>Balance after</span><strong>TZS {slipMoney(receipt.balanceAfter)}</strong></div>
+                                )}
+                                <div className="receipt-rule dash" />
+                                <div className="receipt-thanks">Thank you for your business!</div>
+                                <div className="receipt-powered">Powered by Skulify</div>
                             </div>
                         </div>
-                        <div className="retail-modal-footer">
+                        <div className="retail-modal-footer receipt-modal-footer">
                             <button type="button" className="btn-outline" onClick={closeReceipt}>Close</button>
                             <button
                                 type="button"
