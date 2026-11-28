@@ -8,7 +8,12 @@ import ClassAttendance from '../pages/ClassAttendance';
 import PocketMoney from '../pages/PocketMoney';
 import CashRequests from '../pages/CashRequests';
 import LibraryDesk from '../pages/LibraryDesk';
-import StorePos from '../pages/StorePos';
+import RetailStorePos from '../pages/RetailStorePos';
+import RetailStoreItems from '../pages/RetailStoreItems';
+import RetailTerminals from '../pages/RetailTerminals';
+import RetailInventory from '../pages/RetailInventory';
+import RetailStockMovements from '../pages/RetailStockMovements';
+import RetailPurchaseRequests from '../pages/RetailPurchaseRequests';
 import OperationsHub from '../pages/OperationsHub';
 import TimetableGenerator from '../pages/TimetableGenerator';
 import MarksUpload from '../pages/MarksUpload';
@@ -22,6 +27,20 @@ import ResourcePage from '../components/ResourcePage';
 import ResourceFormPage from '../components/ResourceFormPage';
 import ResourceViewPage from '../components/ResourceViewPage';
 import { RESOURCE_CONFIGS } from '../config/resources';
+
+/** These six paths have purpose-built pages; skip their generated CRUD routes. */
+const CUSTOM_RESOURCE_ROUTES = new Set([
+    'store-pos',
+    'store-items',
+    'store-terminals',
+    'inventory-items',
+    'stock-movements',
+    'purchase-requests',
+]);
+
+const generatedConfigs = Object.values(RESOURCE_CONFIGS).filter(
+    (config) => !CUSTOM_RESOURCE_ROUTES.has(config.resource),
+);
 
 export default function AppRouter() {
   return (
@@ -49,7 +68,27 @@ export default function AppRouter() {
           />
           <Route
             path="/store-pos"
-            element={<ProtectedRoute path="/store-pos"><StorePos /></ProtectedRoute>}
+            element={<ProtectedRoute path="/store-pos"><RetailStorePos /></ProtectedRoute>}
+          />
+          <Route
+            path="/store-items"
+            element={<ProtectedRoute path="/store-items"><RetailStoreItems /></ProtectedRoute>}
+          />
+          <Route
+            path="/store-terminals"
+            element={<ProtectedRoute path="/store-terminals"><RetailTerminals /></ProtectedRoute>}
+          />
+          <Route
+            path="/inventory-items"
+            element={<ProtectedRoute path="/inventory-items"><RetailInventory /></ProtectedRoute>}
+          />
+          <Route
+            path="/stock-movements"
+            element={<ProtectedRoute path="/stock-movements"><RetailStockMovements /></ProtectedRoute>}
+          />
+          <Route
+            path="/purchase-requests"
+            element={<ProtectedRoute path="/purchase-requests"><RetailPurchaseRequests /></ProtectedRoute>}
           />
           <Route
             path="/operations-hub"
@@ -89,7 +128,7 @@ export default function AppRouter() {
             element={<ProtectedRoute path="/attendance"><ClassAttendance /></ProtectedRoute>}
           />
 
-          {Object.values(RESOURCE_CONFIGS).map((config) => (
+          {generatedConfigs.map((config) => (
             <Fragment key={config.resource}>
               <Route
                 path={`/${config.resource}`}

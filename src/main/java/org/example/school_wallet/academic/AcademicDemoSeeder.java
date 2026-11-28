@@ -271,6 +271,7 @@ public class AcademicDemoSeeder implements ApplicationRunner {
         Map<String, Object> itemLunch = seedOne("store-items", "sku",
                 "SKU-SNACK-003", storeItem("SKU-SNACK-003", "Lunch snack pack",
                         "SNACKS", 5500, 45, 12, "Canteen"));
+        seedRetailStock(itemMandazi, itemBusToken, itemExerciseBook, itemJuice, itemSocks, itemLunch);
 
         String cardId = id(studentCard);
         String studentId = id(student1);
@@ -370,6 +371,102 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 SchoolTenants.DEMO_SCHOOL_ID,
                 studentId,
                 studentId);
+        seedDemoLedger(studentId, walletId);
+    }
+
+    /** The demo card history must agree with the append-only Pocket Money ledger. */
+    private void seedDemoLedger(UUID studentId, UUID walletId) {
+        Long ledgerBalance = jdbc.queryForObject(
+                """
+                select coalesce(sum(case when direction = 'CREDIT' then amount else -amount end), 0)
+                from pm_ledger_entries where wallet_id = ?
+                """,
+                Long.class, walletId);
+        if (ledgerBalance != null && ledgerBalance != 0L) {
+            return;
+        }
+        long demoBalance = 188_500L;
+        jdbc.update(
+                "update pm_wallets set balance = ?, updated_at = current_timestamp "
+                        + "where id = ? and balance = 0",
+                demoBalance, walletId);
+
+        seedLedgerTopUp(studentId, walletId, "DEMO-LEDGER-TOPUP-1", 200_000L, 4_000L, 196_000L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-1", 12_000L, 184_000L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-2", 3_500L, 180_500L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-3", 18_000L, 162_500L);
+        seedLedgerRefund(studentId, walletId, "DEMO-LEDGER-REFUND-1", 3_500L, 166_000L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-4", 8_500L, 157_500L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-5", 12_000L, 145_500L);
+        seedLedgerTopUp(studentId, walletId, "DEMO-LEDGER-TOPUP-2", 50_000L, 1_000L, 194_500L);
+        seedLedgerPurchase(studentId, walletId, "DEMO-LEDGER-SALE-6", 6_000L, demoBalance);
+    }
+
+    private void seedLedgerTopUp(
+            UUID studentId, UUID walletId, String key, long gross, long fee, long balanceAfter) {
+        seedLedgerKey(key, studentId);
+        UUID reference = PocketMoneyHashes.deterministicId("DEMO-LEDGER-REF", key);
+        seedLedgerEntry(key, reference, "TOP_UP", "DEBIT", gross, "PARENT_FUNDS_IN", null, null, null);
+        seedLedgerEntry(key, reference, "TOP_UP", "CREDIT", gross - fee,
+                "STUDENT_WALLET", "PARENT_FUNDS_IN", walletId, balanceAfter);
+        seedLedgerEntry(key, reference, "TOP_UP_FEE", "CREDIT", fee,
+                "PLATFORM_REVENUE", "STUDENT_WALLET", null, null);
+    }
+
+    private void seedLedgerPurchase(
+            UUID studentId, UUID walletId, String key, long amount, long balanceAfter) {
+        seedLedgerKey(key, studentId);
+        UUID reference = PocketMoneyHashes.deterministicId("DEMO-LEDGER-REF", key);
+        seedLedgerEntry(key, reference, "PURCHASE", "DEBIT", amount,
+                "STUDENT_WALLET", "SHOP_SETTLEMENT", walletId, balanceAfter);
+        seedLedgerEntry(key, reference, "PURCHASE", "CREDIT", amount,
+                "SHOP_SETTLEMENT", "STUDENT_WALLET", null, null);
+    }
+
+    private void seedLedgerRefund(
+            UUID studentId, UUID walletId, String key, long amount, long balanceAfter) {
+        seedLedgerKey(key, studentId);
+        UUID reference = PocketMoneyHashes.deterministicId("DEMO-LEDGER-REF", key);
+        seedLedgerEntry(key, reference, "REFUND", "CREDIT", amount,
+                "STUDENT_WALLET", "SHOP_SETTLEMENT", walletId, balanceAfter);
+        seedLedgerEntry(key, reference, "REFUND", "DEBIT", amount,
+                "SHOP_SETTLEMENT", "STUDENT_WALLET", null, null);
+    }
+
+    private void seedLedgerKey(String key, UUID studentId) {
+        jdbc.update(
+                """
+                insert into pm_idempotency_keys
+                    (idempotency_key, scope, request_hash, result_ref, created_at)
+                select ?, 'DEMO_SEED', ?, ?, current_timestamp
+                where not exists (select 1 from pm_idempotency_keys where idempotency_key = ?)
+                """,
+                key, PocketMoneyHashes.identifier("DEMO-LEDGER|" + key),
+                studentId.toString(), key);
+    }
+
+    private void seedLedgerEntry(
+            String key,
+            UUID reference,
+            String type,
+            String direction,
+            long amount,
+            String accountCode,
+            String counterAccount,
+            UUID walletId,
+            Long balanceAfter) {
+        UUID entryId = PocketMoneyHashes.deterministicId(
+                "DEMO-LEDGER-ENTRY", key + "|" + type + "|" + accountCode);
+        jdbc.update(
+                """
+                insert into pm_ledger_entries
+                    (id, tenant_id, wallet_id, reference_id, type, direction, amount, currency,
+                     balance_after, account_code, counter_account_code, idempotency_key, created_at)
+                select ?, ?, ?, ?, ?, ?, ?, 'TZS', ?, ?, ?, ?, current_timestamp
+                where not exists (select 1 from pm_ledger_entries where id = ?)
+                """,
+                entryId, SchoolTenants.DEMO_SCHOOL_ID, walletId, reference, type, direction, amount,
+                balanceAfter, accountCode, counterAccount, key, entryId);
     }
 
     /** Seeds the ledger-backed card, merchant and sensor used by demo purchases. */
@@ -419,6 +516,50 @@ public class AcademicDemoSeeder implements ApplicationRunner {
                 merchantId,
                 PocketMoneyHashes.identifier(DEMO_DEVICE_KEY),
                 terminalId);
+    }
+
+    private void seedRetailStock(Map<String, Object>... items) {
+        for (Map<String, Object> item : items) {
+            UUID productId = UUID.fromString(id(item));
+            String sku = String.valueOf(item.get("sku"));
+            int quantity = ((Number) item.getOrDefault("stockQuantity", 0)).intValue();
+            if (quantity < 0) quantity = 0;
+            UUID batchId = PocketMoneyHashes.deterministicId("RETAIL-BATCH", sku);
+            UUID movementId = PocketMoneyHashes.deterministicId("RETAIL-MOVEMENT", sku);
+            String batchNumber = "SEED-" + sku;
+
+            jdbc.update(
+                    """
+                    insert into retail_batches
+                        (id, tenant_id, product_id, batch_number, quantity, quantity_remaining,
+                         unit_cost, expiry_date, received_at, supplier_id, source, reference,
+                         version, created_at, updated_at, created_by, updated_by)
+                    select ?, ?, ?, ?, ?, ?, 0, null, current_timestamp, null, 'SEED', 'DEMO-SEED',
+                           0, current_timestamp, current_timestamp, ?, ?
+                    where not exists (
+                        select 1 from retail_batches where tenant_id = ? and product_id = ? and batch_number = ?
+                    )
+                    """,
+                    batchId, SchoolTenants.DEMO_SCHOOL_ID, productId, batchNumber, quantity, quantity,
+                    SchoolBootstrapSeeder.SCHOOL_ADMIN_ID, SchoolBootstrapSeeder.SCHOOL_ADMIN_ID,
+                    SchoolTenants.DEMO_SCHOOL_ID, productId, batchNumber);
+
+            jdbc.update(
+                    """
+                    insert into retail_stock_movements
+                        (id, tenant_id, product_id, type, quantity, quantity_after, reference, reason,
+                         batch_id, performed_by, version, created_at, updated_at, created_by, updated_by)
+                    select ?, ?, ?, 'RESTOCK', ?, ?, 'DEMO-SEED', 'Initial demo stock', ?, ?,
+                           0, current_timestamp, current_timestamp, ?, ?
+                    where not exists (
+                        select 1 from retail_stock_movements where tenant_id = ? and reference = 'DEMO-SEED' and product_id = ?
+                    )
+                    """,
+                    movementId, SchoolTenants.DEMO_SCHOOL_ID, productId, quantity, quantity,
+                    batchId, SchoolBootstrapSeeder.SCHOOL_ADMIN_ID,
+                    SchoolBootstrapSeeder.SCHOOL_ADMIN_ID, SchoolBootstrapSeeder.SCHOOL_ADMIN_ID,
+                    SchoolTenants.DEMO_SCHOOL_ID, productId);
+        }
     }
 
     private String id(Map<String, Object> record) {

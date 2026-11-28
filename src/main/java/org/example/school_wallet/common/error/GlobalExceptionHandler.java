@@ -29,7 +29,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ProblemDetail handleApiException(ApiException ex, HttpServletRequest request) {
-        return problem(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
+        ProblemDetail problem = problem(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
+        if (ex.getDetails() != null) {
+            problem.setProperty("details", ex.getDetails());
+        }
+        return problem;
     }
 
     @ExceptionHandler(PocketMoneyException.class)
@@ -49,10 +53,18 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ProblemDetail handleMissingHeader(MissingRequestHeaderException ex, HttpServletRequest request) {
+        if ("Idempotency-Key".equals(ex.getHeaderName())) {
+            return problem(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_REQUIRED",
+                    "Idempotency-Key header is required", request);
+        }
+        return problem(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "A required header is missing", request);
+    }
+
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
-            MissingRequestHeaderException.class,
             MissingServletRequestParameterException.class,
             IllegalArgumentException.class
     })
@@ -86,7 +98,8 @@ public class GlobalExceptionHandler {
 
     private HttpStatus pocketMoneyStatus(PocketMoneyErrorCode code) {
         return switch (code) {
-            case INVALID_AMOUNT, IDEMPOTENCY_REQUIRED -> HttpStatus.BAD_REQUEST;
+            case INVALID_AMOUNT, IDEMPOTENCY_REQUIRED, REFUND_EXCEEDS_SALE,
+                    REFUND_TIMESTAMP_REQUIRED -> HttpStatus.BAD_REQUEST;
             case WALLET_NOT_FOUND, CARD_NOT_FOUND, MERCHANT_NOT_FOUND,
                     TERMINAL_NOT_FOUND, PURCHASE_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case WALLET_FROZEN, CARD_BLOCKED, CARD_NOT_ACTIVE, TERMINAL_NOT_ACTIVE,

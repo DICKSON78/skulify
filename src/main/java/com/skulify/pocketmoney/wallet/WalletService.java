@@ -17,6 +17,8 @@ import jakarta.persistence.EntityExistsException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -214,6 +216,82 @@ public class WalletService {
         return purchaseResult(result, wallet, command.amount());
     }
 
+    public RefundResult refund(RefundCommand command) {
+        if (command == null || command.walletId() == null) {
+            throw invalid("wallet is required");
+        }
+        if (command.amount() <= 0) {
+            throw invalid("refund amount must be positive");
+        }
+        long alreadyRefunded = Math.max(0L, command.alreadyRefunded());
+        if (command.amount() > command.originalSaleTotal()) {
+            throw new PocketMoneyException(
+                    PocketMoneyErrorCode.REFUND_EXCEEDS_SALE,
+                    "Refund amount cannot exceed the original sale total");
+        }
+        if (addExact(alreadyRefunded, command.amount()) > command.originalSaleTotal()) {
+            throw new PocketMoneyException(
+                    PocketMoneyErrorCode.REFUND_EXCEEDS_SALE,
+                    "Cumulative refunds cannot exceed the original sale total");
+        }
+        requireKey(command.idempotencyKey());
+
+        PmWallet wallet = walletById(command.walletId());
+        Map<String, String> metadata = Map.of(
+                "businessFingerprint", "walletId=" + wallet.getId()
+                        + "|amount=" + command.amount()
+                        + "|originalSaleTotal=" + command.originalSaleTotal()
+                        + "|originalSaleAt=" + nullToEmpty(command.originalSaleAt()));
+        UUID reference = deterministicReference("REFUND", command.idempotencyKey());
+        LedgerPostingRequest replayProbe = new LedgerPostingRequest(
+                command.idempotencyKey(),
+                "REFUND",
+                reference,
+                wallet.getTenantId(),
+                command.createdBy(),
+                List.of(),
+                metadata);
+        var replay = ledgerService.replayIfPresent(replayProbe);
+        if (replay.isPresent()) {
+            return refundResult(replay.get(), wallet, command.amount());
+        }
+
+        Instant originalSaleAt = command.originalSaleAt();
+        if (originalSaleAt == null) {
+            throw new PocketMoneyException(
+                    PocketMoneyErrorCode.REFUND_TIMESTAMP_REQUIRED,
+                    "Original sale timestamp is required for refund");
+        }
+        int windowMinutes = Math.max(0, properties.getRefundWindowMinutes());
+        if (originalSaleAt.isBefore(Instant.now().minus(Duration.ofMinutes(windowMinutes)))) {
+            throw new PocketMoneyException(
+                    PocketMoneyErrorCode.REFUND_WINDOW_EXPIRED, "Refund window has expired");
+        }
+
+        LedgerResult result = ledgerService.post(new LedgerPostingRequest(
+                command.idempotencyKey(),
+                "REFUND",
+                reference,
+                wallet.getTenantId(),
+                command.createdBy(),
+                List.of(
+                        LedgerPosting.walletPosting(
+                                wallet.getId(),
+                                Direction.CREDIT,
+                                command.amount(),
+                                LedgerEntryType.REFUND,
+                                AccountCode.SHOP_SETTLEMENT),
+                        LedgerPosting.clearingPosting(
+                                AccountCode.SHOP_SETTLEMENT,
+                                Direction.DEBIT,
+                                command.amount(),
+                                LedgerEntryType.REFUND,
+                                AccountCode.STUDENT_WALLET)),
+                metadata));
+
+        return refundResult(result, wallet, command.amount());
+    }
+
     private TopUpResult topUpResult(
             LedgerResult result,
             PmWallet wallet,
@@ -240,6 +318,13 @@ public class WalletService {
         return new PurchaseResult(result.referenceId(), postedAmount, balanceAfter, result.replayed());
     }
 
+    private RefundResult refundResult(LedgerResult result, PmWallet wallet, long fallbackAmount) {
+        long balanceAfter = result.balanceAfterByWallet().getOrDefault(wallet.getId(), wallet.getBalance());
+        long postedAmount = postedAmount(
+                result, LedgerEntryType.REFUND, AccountCode.STUDENT_WALLET, fallbackAmount);
+        return new RefundResult(result.referenceId(), postedAmount, balanceAfter, result.replayed());
+    }
+
     private Map<String, String> purchaseMetadata(PmWallet wallet, PurchaseCommand command) {
         Map<String, String> metadata = new HashMap<>();
         putIfPresent(metadata, "merchantId", command.merchantId());
@@ -263,6 +348,14 @@ public class WalletService {
     private void putIfPresent(Map<String, String> metadata, String name, Object value) {
         if (value != null) {
             metadata.put(name, value.toString());
+        }
+    }
+
+    private long addExact(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException exception) {
+            throw invalid("money amount overflow");
         }
     }
 

@@ -1,6 +1,6 @@
 # Skulify — Module Reference
 
-This document describes the fee, pocket-money, store, library, lab, school-operations, academic-automation, parent-portal, and online-testing modules added on top of the existing generic CRUD platform.
+This document describes the fee, pocket-money, store, retail, library, lab, school-operations, academic-automation, parent-portal, and online-testing modules added on top of the existing generic CRUD platform.
 
 ## Design principles
 
@@ -306,12 +306,48 @@ select balance from pocket_cards where tenant_id = :tenantId and id = :cardId;
 3. Verify cron properties and that `AUTOMATION_ENABLED=true` reached the container.
 4. Re-run the specific service action manually through its API once the root cause is resolved.
 
-## Verification performed
+## Retail engine (V13)
 
-- `./gradlew test bootJar --no-daemon` — 30 tests, 0 failures (includes PostgreSQL Flyway/validate, the four operations flows, and the five academic automation flows).
-- `npm --prefix frontend/school-wallet-react run build` — passed; built assets synced to `src/main/resources/static/`.
-- `docker compose config --quiet` — passed. `docker compose build` could not be re-run in this environment because Docker registry DNS is unavailable; the isolated smoke below used the locally built bootJar staged into the cached runtime image instead.
-- Dev smoke on `8085` — `/`, `/login`, `/dashboard`, `/parent-portal`, `/online-tests`, `/test/{token}`, `/parent-letters`, create/edit deep links, hashed assets and health all `200`; unauthenticated API `401`.
-- Online-test flow — teacher created and published a two-question test, the signed link preview/start/submit worked for `DEMO-STU-001` (score 5/5), and the teacher's attendance report showed 1 attended / 1 not attended.
-- Marks flow — CSV template download, two-subject import, grading, ranking (Asha 81.5% position 1, Juma 53.5% position 2), strong/weak subjects and two parent letters, plus guardian aggregate showing results, attendance, card, letter and fees.
-- Isolated prod smoke on temporary ports `8086`/`55432` — health `UP`, SPA and deep links `200`, unauthenticated API `401`, API docs `404`, migrations `1`/`1.1`/`2`/`3`/`4`/`5` successful, 54 public tables (including `online_tests`, `test_attempts`, `parent_letters`), `app_users=0`.
+Migration `V13__retail_engine.sql` adds retail suppliers, batches, stock movements, sales/sale items/batch allocations, refunds, discounts, and purchase orders/items. Stock movements and refunds are append-only (PostgreSQL triggers reject UPDATE/DELETE).
+
+### Key flows
+
+- **Preview/sale**: `POST /api/v1/retail/preview` prices items server-side and returns a pricing fingerprint. `POST /api/v1/retail/sales` requires `Idempotency-Key`, verifies `PRICE_CHANGED` against the fingerprint, consumes FEFO batches (`quantity_remaining > 0`, not expired, tenant-scoped), updates `store_items.stock_quantity` in the same transaction, and debits Pocket Money through `PocketMoneyPurchaseService` (`retail-sale-<idempotencyKey>`).
+- **Idempotency**: sale/return/stock/PO write endpoints require idempotency keys; same key with different request hash returns conflict; replay returns the existing result without double debit or double stock mutation.
+- **Returns/refunds**: `POST /api/v1/retail/sales/{id}/return` validates refund window/amount (`<= original sale total`), restocks original batches or writes off, records append-only refund, and credits wallet through `WalletService.refund` (balanced REFUND ledger postings: `CREDIT wallet REFUND / DEBIT SHOP_SETTLEMENT REFUND`).
+- **Stock/PO**: restock/adjust create batches and append-only stock movements; purchase orders support create/approve/receive/cancel, and receiving creates batches + RESTOCK movements.
+- **Reconciliation**: `GET /api/v1/retail/stock/reconciliation` compares `store_items.stock_quantity` to summed `retail_stock_movements`.
+
+### API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/v1/retail/sales/preview` | Price preview + fingerprint |
+| `POST` | `/api/v1/retail/sales` | Idempotent PM sale, FEFO consume |
+| `GET` | `/api/v1/retail/sales` | List sales (`studentId`, `limit`) |
+| `GET` | `/api/v1/retail/sales/{id}` | Sale detail |
+| `GET` | `/api/v1/retail/sales/{id}/receipt` | Receipt JSON |
+| `GET` | `/api/v1/retail/sales/{id}/receipt/print` | Printable receipt |
+| `POST` | `/api/v1/retail/sales/{id}/return` | Idempotent refund/return |
+| `POST` | `/api/v1/retail/stock/restock` | Manual restock batch |
+| `POST` | `/api/v1/retail/stock/adjust` | Stock adjustment with reason |
+| `GET` | `/api/v1/retail/batches` | Batch list (`productId`) |
+| `GET` | `/api/v1/retail/stock-movements` | Movement ledger (`productId`) |
+| `GET` | `/api/v1/retail/stock/reconciliation` | Cached vs ledger stock |
+| `GET` | `/api/v1/retail/low-stock` | Reorder alerts |
+| `GET/POST` | `/api/v1/retail/suppliers` | Supplier management |
+| `GET/POST` | `/api/v1/retail/discounts` | Discount management |
+| `GET/POST` | `/api/v1/retail/purchase-orders` | PO create/list |
+| `GET` | `/api/v1/retail/purchase-orders/{id}` | PO detail |
+| `POST` | `/api/v1/retail/purchase-orders/{id}/approve` | Approve PO |
+| `POST` | `/api/v1/retail/purchase-orders/{id}/receive` | Receive PO into batches/stock |
+| `POST` | `/api/v1/retail/purchase-orders/{id}/cancel` | Cancel PO |
+| `GET` | `/api/v1/retail/terminals` | Retail/POS terminals |
+
+### Verification performed
+
+- `SPRING_DEVTOOLS_RESTART_ENABLED=false ./gradlew test --no-daemon` — 71 tests, 0 failures (13 retail integration tests cover FEFO, refunds, reconciliation, idempotent replay, concurrent replay, and refund-window/tenant guards).
+- `npm --prefix frontend/school-wallet-react run build` — passed; hashed assets synced to `src/main/resources/static/`.
+- Docker local stack — `skulify-app` and `skulify-postgres` healthy, Flyway history through `V13`, no host Postgres port.
+- API smoke — sale/replay/receipt/return/reconciliation/wallet ledger verified; replay returns the stored response without a second debit.
+- Playwright UI check — all six Store & Inventory routes return `200`, no console/page errors, no visible UUIDs, sidebar contains exactly the six expected labels, PWA remains `skulify-v17`, and `/api/`/`/actuator/` bypass the service worker.

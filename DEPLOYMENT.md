@@ -84,6 +84,7 @@ Flyway runs automatically at startup with these migrations:
 | 3 | `V3__operations.sql` | Fee plans/invoices, pocket cards and ledger, store/inventory, departments, staff attendance, tasks, library, lab sessions |
 | 4 | `V4__academic_automation.sql` | Periods, exams, exam sessions, duty assignments, report cards, staff leaves, school events |
 | 5 | `V5__parent_portal_testing.sql` | Online tests, test attempts, parent letters |
+| 13 | `V13__retail_engine.sql` | Retail engine: suppliers, batches, stock movements, sales, sale items/batches, refunds, discounts, purchase orders/items, append-only triggers |
 
 Rules:
 

@@ -43,15 +43,29 @@ export const tokenStore = {
     },
 };
 
-async function parseError(response: Response): Promise<string> {
+export type ApiError = Error & {
+    code?: string;
+    details?: unknown;
+    status?: number;
+};
+
+async function parseError(response: Response): Promise<ApiError> {
     let message = `Request failed (${response.status})`;
+    let code: string | undefined;
+    let details: unknown;
     try {
         const body = await response.json();
         message = body.detail ?? body.message ?? body.title ?? message;
+        code = body.code ?? body.errorCode ?? body.error;
+        details = body.details ?? body.data;
     } catch {
         // keep the generic message
     }
-    return message;
+    const error = new Error(message) as ApiError;
+    error.code = code;
+    error.details = details;
+    error.status = response.status;
+    return error;
 }
 
 async function refreshSession(): Promise<boolean> {
@@ -102,7 +116,7 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
     }
 
     if (!response.ok) {
-        throw new Error(await parseError(response));
+        throw await parseError(response);
     }
     if (response.status === 204) {
         return undefined as T;
@@ -117,7 +131,7 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
         headers: { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string> | undefined) },
     });
     if (!response.ok) {
-        throw new Error(await parseError(response));
+        throw await parseError(response);
     }
     if (response.status === 204) {
         return undefined as T;
@@ -133,7 +147,7 @@ export const authApi = {
             body: JSON.stringify({ identifier, password }),
         });
         if (!response.ok) {
-            throw new Error(await parseError(response));
+            throw await parseError(response);
         }
         return response.json() as Promise<LoginResult>;
     },
@@ -145,7 +159,7 @@ export const authApi = {
             body: JSON.stringify({ token, code }),
         });
         if (!response.ok) {
-            throw new Error(await parseError(response));
+            throw await parseError(response);
         }
         return response.json() as Promise<LoginResult>;
     },
@@ -186,7 +200,7 @@ export const api = {
             headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         });
         if (!response.ok) {
-            throw new Error(await parseError(response));
+            throw await parseError(response);
         }
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -209,7 +223,7 @@ export const documentsApi = {
             headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         });
         if (!response.ok) {
-            throw new Error(await parseError(response));
+            throw await parseError(response);
         }
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -290,8 +304,22 @@ export const pocketMoneyApi = {
             headers: { 'Idempotency-Key': key },
             body: JSON.stringify(body),
         }),
-    merchants: <T>() => request<T>('/pocket-money/merchants'),
-    terminals: <T>() => request<T>('/pocket-money/terminals'),
+    merchants: <T>() => request<T>('/pocket-money/merchants', { cache: 'no-store' }),
+    registerMerchant: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/merchants', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
+    terminals: <T>() => request<T>('/pocket-money/terminals', { cache: 'no-store' }),
+    registerTerminal: <T>(key: string, body: Record<string, unknown>) =>
+        request<T>('/pocket-money/terminals', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify(body),
+        }),
     purchases: <T>(studentId?: string) => {
         const query = studentId ? `?studentId=${encodeURIComponent(studentId)}` : '';
         return request<T>(`/pocket-money/purchases${query}`);
@@ -308,6 +336,140 @@ export const pocketMoneyApi = {
             headers: { 'Idempotency-Key': key },
             body: JSON.stringify(body),
         }),
+};
+
+export type RetailRow = Record<string, unknown>;
+export type RetailCartItem = { productId: string; quantity: number };
+export type RetailPreviewLine = {
+    productId: string;
+    sku?: string;
+    name?: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    availableStock?: number;
+};
+export type RetailPreview = {
+    pricingFingerprint?: string;
+    fingerprint?: string;
+    subtotal: number;
+    discount: number;
+    total: number;
+    currency?: string;
+    lines: RetailPreviewLine[];
+    merchantCode?: string;
+    terminalCode?: string;
+};
+
+/** Fresh key per business action; callers keep it for retries of that action. */
+export function newIdempotencyKey(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+const retailWrite = (body: Record<string, unknown>, key?: string): RequestInit => ({
+    method: 'POST',
+    cache: 'no-store',
+    headers: key ? { 'Idempotency-Key': key } : {},
+    body: JSON.stringify(body),
+});
+
+const retailAction = (key: string): RequestInit => ({
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'Idempotency-Key': key },
+});
+
+const retailQuery = (values: Record<string, string | number | undefined>): string => {
+    const params = new URLSearchParams();
+    Object.entries(values).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            params.set(key, String(value));
+        }
+    });
+    const query = params.toString();
+    return query ? `?${query}` : '';
+};
+
+/**
+ * Retail engine: server-side pricing, FEFO batches and the stock ledger.
+ * Money always settles through the existing Pocket Money ledger.
+ */
+export const retailApi = {
+    preview: <T = RetailPreview>(body: Record<string, unknown>) =>
+        request<T>('/retail/sales/preview', retailWrite(body)),
+    createSale: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/sales', retailWrite(body, key)),
+    sales: <T = RetailRow[]>(studentId?: string, limit?: number) =>
+        request<T>(`/retail/sales${retailQuery({ studentId, limit })}`, { cache: 'no-store' }),
+    sale: <T = RetailRow>(id: string) =>
+        request<T>(`/retail/sales/${encodeURIComponent(id)}`, { cache: 'no-store' }),
+    receipt: <T = RetailRow>(id: string) =>
+        request<T>(`/retail/sales/${encodeURIComponent(id)}/receipt`, { cache: 'no-store' }),
+    printReceipt: async (id: string): Promise<void> => {
+        const accessToken = tokenStore.access();
+        const response = await fetch(
+            `${BASE}/retail/sales/${encodeURIComponent(id)}/receipt/print`,
+            {
+                cache: 'no-store',
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            },
+        );
+        if (!response.ok) {
+            throw await parseError(response);
+        }
+        const html = await response.text();
+        const target = window.open('', '_blank');
+        if (!target) {
+            throw new Error('Allow pop-ups to open the printable receipt.');
+        }
+        target.document.open();
+        target.document.write(html);
+        target.document.close();
+        target.focus();
+    },
+    returnSale: <T = RetailRow>(id: string, key: string, body: Record<string, unknown>) =>
+        request<T>(`/retail/sales/${encodeURIComponent(id)}/return`, retailWrite(body, key)),
+
+    restock: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/stock/restock', retailWrite(body, key)),
+    adjust: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/stock/adjust', retailWrite(body, key)),
+    batches: <T = RetailRow[]>(productId?: string) =>
+        request<T>(`/retail/batches${retailQuery({ productId })}`, { cache: 'no-store' }),
+    stockMovements: <T = RetailRow[]>(productId?: string) =>
+        request<T>(`/retail/stock-movements${retailQuery({ productId })}`, { cache: 'no-store' }),
+    reconciliation: <T = RetailRow>() =>
+        request<T>('/retail/stock/reconciliation', { cache: 'no-store' }),
+    lowStock: <T = RetailRow[]>() =>
+        request<T>('/retail/low-stock', { cache: 'no-store' }),
+
+    suppliers: <T = RetailRow[]>() =>
+        request<T>('/retail/suppliers', { cache: 'no-store' }),
+    createSupplier: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/suppliers', retailWrite(body, key)),
+    discounts: <T = RetailRow[]>() =>
+        request<T>('/retail/discounts', { cache: 'no-store' }),
+    createDiscount: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/discounts', retailWrite(body, key)),
+
+    purchaseOrders: <T = RetailRow[]>() =>
+        request<T>('/retail/purchase-orders', { cache: 'no-store' }),
+    purchaseOrder: <T = RetailRow>(id: string) =>
+        request<T>(`/retail/purchase-orders/${encodeURIComponent(id)}`, { cache: 'no-store' }),
+    createPurchaseOrder: <T = RetailRow>(key: string, body: Record<string, unknown>) =>
+        request<T>('/retail/purchase-orders', retailWrite(body, key)),
+    approvePurchaseOrder: <T = RetailRow>(id: string, key: string) =>
+        request<T>(`/retail/purchase-orders/${encodeURIComponent(id)}/approve`, retailAction(key)),
+    receivePurchaseOrder: <T = RetailRow>(id: string, key: string, body: Record<string, unknown>) =>
+        request<T>(`/retail/purchase-orders/${encodeURIComponent(id)}/receive`, retailWrite(body, key)),
+    cancelPurchaseOrder: <T = RetailRow>(id: string, key: string) =>
+        request<T>(`/retail/purchase-orders/${encodeURIComponent(id)}/cancel`, retailAction(key)),
+
+    terminals: <T = RetailRow[]>() =>
+        request<T>('/retail/terminals', { cache: 'no-store' }),
 };
 
 /** Domain actions that sit alongside the generic /api/v1/{resource} CRUD surface. */
@@ -406,7 +568,7 @@ export const academicsApi = {
             headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         });
         if (!response.ok) {
-            throw new Error(await parseError(response));
+            throw await parseError(response);
         }
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') ?? '';
