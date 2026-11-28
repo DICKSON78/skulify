@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
 import TableEmptyState from '../components/TableEmptyState';
 import TableIcon from '../components/TableIcon';
-import { FormCard, Notice, StatTile, money, text } from '../components/ModuleUi';
+import { Notice, StatTile, money, text } from '../components/ModuleUi';
 import { api, newIdempotencyKey, retailApi, type RetailRow } from '../lib/api';
 
 type Row = RetailRow;
@@ -260,6 +260,7 @@ export default function RetailPurchaseRequests() {
                     title="Purchase Requests"
                     subtitle="Suppliers, purchase orders, approvals and batch receiving"
                     icon="SealCheck"
+                    badge={<span className="badge badge-warning">{pending} open</span>}
                 />
                 <Notice error={error} success={success} />
 
@@ -283,351 +284,434 @@ export default function RetailPurchaseRequests() {
                 </div>
 
                 {tab === 'orders' && (
-                    <div className="space-y-4">
-                        <FormCard title="Create a purchase order" icon="ClipboardText">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <label className="block">
-                                    <span className="form-label">Supplier</span>
-                                    <select className="form-input w-full" value={orderDraft.supplierId} onChange={(event) => setOrderDraft((current) => ({ ...current, supplierId: event.target.value }))}>
-                                        <option value="">Choose supplier...</option>
-                                        {suppliers.map((row) => (
-                                            <option key={text(row.id)} value={text(row.id)}>{text(row.name)} · {text(row.code)}</option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Reference (optional)</span>
-                                    <input className="form-input w-full" value={orderDraft.reference} onChange={(event) => setOrderDraft((current) => ({ ...current, reference: event.target.value }))} placeholder="e.g. PO-2026-018" />
-                                </label>
+                    <div className="retail-workbench">
+                        <section className="retail-panel" aria-label="Purchase orders">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="ListChecks" size={18} /></span>
+                                    Purchase orders
+                                </h2>
+                                <span className="retail-panel-hint">{orders.length} orders</span>
                             </div>
-                            <div className="re-table-wrap mt-4">
-                                <table className="re-table">
-                                    <thead>
-                                        <tr>
-                                            <th><span className="table-col"><TableIcon label="Item" /><span>Item</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Quantity" /><span>Quantity</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Unit cost" /><span>Unit cost</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Action" /><span>Action</span></span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {orderDraft.lines.map((line, index) => (
-                                            <tr key={index}>
-                                                <td>
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label="Item" value={line.productId} />
-                                                        <select
-                                                            className="form-input"
-                                                            value={line.productId}
-                                                            onChange={(event) => setOrderDraft((current) => ({
-                                                                ...current,
-                                                                lines: current.lines.map((draft, i) => i === index ? { ...draft, productId: event.target.value } : draft),
-                                                            }))}
-                                                            aria-label={`Order item ${index + 1}`}
-                                                        >
-                                                            <option value="">Choose item...</option>
-                                                            {items.map((row) => (
-                                                                <option key={text(row.id)} value={text(row.id)}>{text(row.name)} · {text(row.sku)}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label="Quantity" value={line.quantity} />
-                                                        <input className="form-input" type="number" min="1" value={line.quantity} onChange={(event) => setOrderDraft((current) => ({ ...current, lines: current.lines.map((draft, i) => i === index ? { ...draft, quantity: event.target.value } : draft) }))} aria-label={`Quantity ${index + 1}`} style={{ width: 90 }} />
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label="Unit cost" value={line.unitCost} />
-                                                        <input className="form-input" type="number" min="0" value={line.unitCost} onChange={(event) => setOrderDraft((current) => ({ ...current, lines: current.lines.map((draft, i) => i === index ? { ...draft, unitCost: event.target.value } : draft) }))} aria-label={`Unit cost ${index + 1}`} style={{ width: 120 }} placeholder="Optional" />
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label="Action" />
-                                                        <span className="min-w-0 flex flex-wrap gap-2">
-                                                            <button type="button" className="btn-outline btn-xs" onClick={() => setOrderDraft((current) => ({ ...current, lines: [...current.lines, { productId: text(items[0]?.id), quantity: '1', unitCost: '' }] }))}>Add line</button>
-                                                            {orderDraft.lines.length > 1 && (
-                                                                <button type="button" className="btn-outline btn-xs" onClick={() => setOrderDraft((current) => ({ ...current, lines: current.lines.filter((_, i) => i !== index) }))}>Remove</button>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <label className="block mt-4">
-                                <span className="form-label">Notes</span>
-                                <input className="form-input w-full" value={orderDraft.notes} onChange={(event) => setOrderDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="e.g. Term 1 stationery" />
-                            </label>
-                            <button type="button" className="btn-primary mt-4" disabled={busy} onClick={() => void createOrder()}>
-                                <Icon name="Plus" size={16} className="mr-2" /> Create order
-                            </button>
-                        </FormCard>
-
-                        {receiving && (
-                            <FormCard title={`Receive · ${text(receiving.order.reference) || 'Purchase order'}`} icon="Truck">
+                            <div className="retail-panel-body">
+                                <div className="retail-flow-steps mb-4">
+                                    <span className="retail-flow-step retail-flow-step-active"><Icon name="ClipboardText" size={14} /> Draft</span>
+                                    <Icon name="CaretRight" size={12} />
+                                    <span className="retail-flow-step"><Icon name="SealCheck" size={14} /> Approve</span>
+                                    <Icon name="CaretRight" size={12} />
+                                    <span className="retail-flow-step"><Icon name="Truck" size={14} /> Receive</span>
+                                </div>
                                 <div className="re-table-wrap">
                                     <table className="re-table">
                                         <thead>
                                             <tr>
-                                                <th><span className="table-col"><TableIcon label="Item" /><span>Item</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Ordered" /><span>Ordered</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Received" /><span>Received</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Quantity" /><span>Receive qty</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Batch" /><span>Batch</span></span></th>
-                                                <th><span className="table-col"><TableIcon label="Expiry" /><span>Expiry</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Supplier" /><span>Supplier</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Total" /><span>Total</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Action" /><span>Action</span></span></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {receiving.lines.map((line, index) => {
-                                                const lineId = text(line.orderItemId ?? line.id);
-                                                const value = receiving.values[lineId] ?? { quantity: '', batchNumber: '', expiryDate: '' };
-                                                const update = (patch: Partial<ReceiveValue>) =>
-                                                    setReceiving((current) => current ? {
-                                                        ...current,
-                                                        values: { ...current.values, [lineId]: { ...value, ...patch } },
-                                                    } : current);
+                                            {orders.map((order) => {
+                                                const status = text(order.status);
+                                                const id = text(order.id);
                                                 return (
-                                                    <tr key={lineId || index}>
-                                                        <td><div className="table-cell-content"><TableIcon label="Item" value={line.productId} /><span className="min-w-0 font-semibold">{productName(text(line.productId))}<span className="block text-xs text-gray-400">{productSku(text(line.productId))}</span></span></div></td>
-                                                        <td><div className="table-cell-content"><TableIcon label="Ordered" value={line.quantity} /><span className="min-w-0">{text(line.quantity)}</span></div></td>
-                                                        <td><div className="table-cell-content"><TableIcon label="Received" value={line.quantityReceived} /><span className="min-w-0">{text(line.quantityReceived ?? 0)}</span></div></td>
+                                                    <tr key={id}>
+                                                        <td><div className="table-cell-content"><TableIcon label="Reference" value={order.reference} /><span className="min-w-0 font-mono text-xs font-semibold">{text(order.reference) || '—'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Supplier" value={order.supplierId} /><span className="min-w-0">{supplierName(text(order.supplierId))}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'OPEN'}</span></span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Total" value={order.total} /><span className="min-w-0 font-semibold">{money(order.total)}</span></div></td>
                                                         <td>
                                                             <div className="table-cell-content">
-                                                                <TableIcon label="Quantity" />
-                                                                <input className="form-input" type="number" min="0" value={value.quantity} onChange={(event) => update({ quantity: event.target.value })} aria-label={`Receive quantity for ${productName(text(line.productId))}`} style={{ width: 90 }} />
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="table-cell-content">
-                                                                <TableIcon label="Batch" />
-                                                                <input className="form-input" value={value.batchNumber} onChange={(event) => update({ batchNumber: event.target.value })} aria-label={`Batch for ${productName(text(line.productId))}`} placeholder="Batch no." />
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div className="table-cell-content">
-                                                                <TableIcon label="Expiry" />
-                                                                <input className="form-input" type="date" value={value.expiryDate} onChange={(event) => update({ expiryDate: event.target.value })} aria-label={`Expiry for ${productName(text(line.productId))}`} />
+                                                                <TableIcon label="Action" value={status} />
+                                                                <span className="min-w-0 flex flex-wrap gap-2">
+                                                                    {status === 'OPEN' && (
+                                                                        <button type="button" className="btn-primary btn-xs" disabled={busy} onClick={() => void approve(order)}>Approve</button>
+                                                                    )}
+                                                                    {['APPROVED', 'PARTIALLY_RECEIVED'].includes(status) && (
+                                                                        <button type="button" className="btn-primary btn-xs" disabled={busy} onClick={() => void openReceive(order)}>Receive</button>
+                                                                    )}
+                                                                    {['OPEN', 'APPROVED', 'PARTIALLY_RECEIVED'].includes(status) && (
+                                                                        <button type="button" className="btn-outline btn-xs" disabled={busy} onClick={() => void cancel(order)}>Cancel</button>
+                                                                    )}
+                                                                    {['RECEIVED', 'CANCELLED'].includes(status) && (
+                                                                        <span className="text-xs text-muted">Closed</span>
+                                                                    )}
+                                                                </span>
                                                             </div>
                                                         </td>
                                                     </tr>
                                                 );
                                             })}
-                                            {receiving.lines.length === 0 && (
-                                                <TableEmptyState colSpan={6} icon="ClipboardText" message="Order lines are not available for this order." />
+                                            {orders.length === 0 && (
+                                                <TableEmptyState colSpan={5} icon="SealCheck" message="No purchase orders yet. Add a supplier and create the first order." />
                                             )}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="flex flex-wrap gap-2 mt-4">
-                                    <button type="button" className="btn-primary" disabled={busy} onClick={() => void receive()}>
-                                        <Icon name="Check" size={16} className="mr-2" /> Confirm receipt
-                                    </button>
-                                    <button type="button" className="btn-outline" onClick={() => setReceiving(null)}>Cancel</button>
-                                </div>
-                            </FormCard>
-                        )}
+                            </div>
+                        </section>
 
-                        <FormCard title="Purchase orders" icon="ListChecks">
+                        <section className="retail-panel" aria-label="Create purchase order">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="ClipboardText" size={18} /></span>
+                                    New purchase order
+                                </h2>
+                                <span className="retail-panel-hint">{suppliers.length} suppliers</span>
+                            </div>
+                            <div className="retail-panel-body">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <label className="block">
+                                        <span className="form-label">Supplier</span>
+                                        <select className="form-input w-full" value={orderDraft.supplierId} onChange={(event) => setOrderDraft((current) => ({ ...current, supplierId: event.target.value }))}>
+                                            <option value="">Choose supplier...</option>
+                                            {suppliers.map((row) => (
+                                                <option key={text(row.id)} value={text(row.id)}>{text(row.name)} · {text(row.code)}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className="block">
+                                        <span className="form-label">Reference (optional)</span>
+                                        <input className="form-input w-full" value={orderDraft.reference} onChange={(event) => setOrderDraft((current) => ({ ...current, reference: event.target.value }))} placeholder="PO-2026-018" />
+                                    </label>
+                                    <div className="re-table-wrap">
+                                        <table className="re-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><span className="table-col"><TableIcon label="Item" /><span>Item</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Quantity" /><span>Qty</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Unit cost" /><span>Cost</span></span></th>
+                                                    <th><span className="table-col"><TableIcon label="Action" /><span>Action</span></span></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {orderDraft.lines.map((line, index) => (
+                                                    <tr key={index}>
+                                                        <td>
+                                                            <div className="table-cell-content">
+                                                                <TableIcon label="Item" value={line.productId} />
+                                                                <select className="form-input" value={line.productId} onChange={(event) => setOrderDraft((current) => ({
+                                                                    ...current,
+                                                                    lines: current.lines.map((draft, i) => i === index ? { ...draft, productId: event.target.value } : draft),
+                                                                }))} aria-label={`Order item ${index + 1}`}>
+                                                                    <option value="">Choose item...</option>
+                                                                    {items.map((row) => (
+                                                                        <option key={text(row.id)} value={text(row.id)}>{text(row.name)} · {text(row.sku)}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="table-cell-content">
+                                                                <TableIcon label="Quantity" value={line.quantity} />
+                                                                <input className="form-input" type="number" min="1" value={line.quantity} onChange={(event) => setOrderDraft((current) => ({
+                                                                    ...current,
+                                                                    lines: current.lines.map((draft, i) => i === index ? { ...draft, quantity: event.target.value } : draft),
+                                                                }))} aria-label={`Quantity ${index + 1}`} style={{ width: 70 }} />
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="table-cell-content">
+                                                                <TableIcon label="Unit cost" value={line.unitCost} />
+                                                                <input className="form-input" type="number" min="0" value={line.unitCost} onChange={(event) => setOrderDraft((current) => ({
+                                                                    ...current,
+                                                                    lines: current.lines.map((draft, i) => i === index ? { ...draft, unitCost: event.target.value } : draft),
+                                                                }))} aria-label={`Unit cost ${index + 1}`} style={{ width: 90 }} placeholder="—" />
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="table-cell-content">
+                                                                <TableIcon label="Action" />
+                                                                <span className="min-w-0 flex flex-wrap gap-1">
+                                                                    <button type="button" className="btn-outline btn-xs" onClick={() => setOrderDraft((current) => ({
+                                                                        ...current,
+                                                                        lines: [...current.lines, { productId: text(items[0]?.id), quantity: '1', unitCost: '' }],
+                                                                    }))}>Add</button>
+                                                                    {orderDraft.lines.length > 1 && (
+                                                                        <button type="button" className="btn-outline btn-xs" onClick={() => setOrderDraft((current) => ({
+                                                                            ...current,
+                                                                            lines: current.lines.filter((_, i) => i !== index),
+                                                                        }))}>Remove</button>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <label className="block">
+                                        <span className="form-label">Notes</span>
+                                        <input className="form-input w-full" value={orderDraft.notes} onChange={(event) => setOrderDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="e.g. Term 1 stationery" />
+                                    </label>
+                                    <button type="button" className="btn-primary" disabled={busy} onClick={() => void createOrder()}>
+                                        <Icon name="Plus" size={16} className="mr-2" /> Create order
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )}
+
+                {tab === 'suppliers' && (
+                    <div className="retail-workbench">
+                        <section className="retail-panel" aria-label="Suppliers">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="Truck" size={18} /></span>
+                                    Supplier directory
+                                </h2>
+                                <span className="retail-panel-hint">{suppliers.length} suppliers</span>
+                            </div>
+                            <div className="retail-panel-body">
+                                <div className="re-table-wrap">
+                                    <table className="re-table">
+                                        <thead>
+                                            <tr>
+                                                <th><span className="table-col"><TableIcon label="Code" /><span>Code</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Supplier" /><span>Supplier</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Phone" /><span>Phone</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {suppliers.map((row) => {
+                                                const status = text(row.status);
+                                                return (
+                                                    <tr key={text(row.id)}>
+                                                        <td><div className="table-cell-content"><TableIcon label="Code" value={row.code} /><span className="min-w-0 font-mono text-xs font-semibold">{text(row.code) || '—'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Supplier" value={row.name} /><span className="min-w-0 font-semibold text-gray-900">{text(row.name) || '—'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Phone" value={row.phone} /><span className="min-w-0">{text(row.phone) || '—'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'ACTIVE'}</span></span></div></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {suppliers.length === 0 && (
+                                                <TableEmptyState colSpan={4} icon="Truck" message="No suppliers registered yet." />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="retail-panel" aria-label="Add supplier">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="Plus" size={18} /></span>
+                                    Add supplier
+                                </h2>
+                            </div>
+                            <div className="retail-panel-body">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="block">
+                                            <span className="form-label">Code</span>
+                                            <input className="form-input w-full" value={supplierForm.code} onChange={(event) => setSupplierForm((current) => ({ ...current, code: event.target.value }))} placeholder="SUP-001" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="form-label">Name</span>
+                                            <input className="form-input w-full" value={supplierForm.name} onChange={(event) => setSupplierForm((current) => ({ ...current, name: event.target.value }))} placeholder="Supplier name" />
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="block">
+                                            <span className="form-label">Phone</span>
+                                            <input className="form-input w-full" value={supplierForm.phone} onChange={(event) => setSupplierForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Optional" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="form-label">Status</span>
+                                            <select className="form-input w-full" value={supplierForm.status} onChange={(event) => setSupplierForm((current) => ({ ...current, status: event.target.value }))}>
+                                                <option value="ACTIVE">ACTIVE</option>
+                                                <option value="INACTIVE">INACTIVE</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <label className="block">
+                                        <span className="form-label">Email</span>
+                                        <input className="form-input w-full" type="email" value={supplierForm.email} onChange={(event) => setSupplierForm((current) => ({ ...current, email: event.target.value }))} placeholder="Optional" />
+                                    </label>
+                                    <button type="button" className="btn-primary" disabled={busy} onClick={() => void createSupplier()}>
+                                        <Icon name="Plus" size={16} className="mr-2" /> Add supplier
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )}
+
+                {tab === 'discounts' && (
+                    <div className="retail-workbench">
+                        <section className="retail-panel" aria-label="Discount codes">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="Tag" size={18} /></span>
+                                    Discount codes
+                                </h2>
+                                <span className="retail-panel-hint">{discounts.length} codes</span>
+                            </div>
+                            <div className="retail-panel-body">
+                                <div className="re-table-wrap">
+                                    <table className="re-table">
+                                        <thead>
+                                            <tr>
+                                                <th><span className="table-col"><TableIcon label="Code" /><span>Code</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Kind" /><span>Kind</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Value" /><span>Value</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Expires" /><span>Expires</span></span></th>
+                                                <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {discounts.map((row) => {
+                                                const status = text(row.status);
+                                                return (
+                                                    <tr key={text(row.id)}>
+                                                        <td><div className="table-cell-content"><TableIcon label="Code" value={row.code} /><span className="min-w-0 font-mono text-xs font-semibold">{text(row.code) || '—'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Kind" value={row.kind} /><span className="min-w-0">{text(row.kind)}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Value" value={row.value} /><span className="min-w-0 font-semibold">{text(row.kind) === 'PERCENT' ? `${text(row.value)}%` : money(row.value)}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Expires" value={row.expiresAt} /><span className="min-w-0">{text(row.expiresAt).slice(0, 10) || 'No expiry'}</span></div></td>
+                                                        <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'ACTIVE'}</span></span></div></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {discounts.length === 0 && (
+                                                <TableEmptyState colSpan={5} icon="Tag" message="No discount codes configured yet." />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="retail-panel" aria-label="Create discount">
+                            <div className="retail-panel-header">
+                                <h2 className="retail-panel-title">
+                                    <span className="icon-tile"><Icon name="Plus" size={18} /></span>
+                                    Create discount
+                                </h2>
+                            </div>
+                            <div className="retail-panel-body">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="block">
+                                            <span className="form-label">Code</span>
+                                            <input className="form-input w-full" value={discountForm.code} onChange={(event) => setDiscountForm((current) => ({ ...current, code: event.target.value }))} placeholder="SCHOOL10" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="form-label">Kind</span>
+                                            <select className="form-input w-full" value={discountForm.kind} onChange={(event) => setDiscountForm((current) => ({ ...current, kind: event.target.value }))}>
+                                                <option value="PERCENT">PERCENT</option>
+                                                <option value="FIXED">FIXED</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="block">
+                                            <span className="form-label">Value</span>
+                                            <input className="form-input w-full" type="number" min="0" value={discountForm.value} onChange={(event) => setDiscountForm((current) => ({ ...current, value: event.target.value }))} placeholder={discountForm.kind === 'PERCENT' ? '10' : '500'} />
+                                        </label>
+                                        <label className="block">
+                                            <span className="form-label">Status</span>
+                                            <select className="form-input w-full" value={discountForm.status} onChange={(event) => setDiscountForm((current) => ({ ...current, status: event.target.value }))}>
+                                                <option value="ACTIVE">ACTIVE</option>
+                                                <option value="INACTIVE">INACTIVE</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <label className="block">
+                                        <span className="form-label">Expires on</span>
+                                        <input className="form-input w-full" type="date" value={discountForm.expiresAt} onChange={(event) => setDiscountForm((current) => ({ ...current, expiresAt: event.target.value }))} />
+                                    </label>
+                                    <button type="button" className="btn-primary" disabled={busy} onClick={() => void createDiscount()}>
+                                        <Icon name="Plus" size={16} className="mr-2" /> Create discount
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )}
+            </div>
+
+            {receiving && (
+                <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setReceiving(null); }}>
+                    <div className="modal-card retail-modal-card" role="dialog" aria-modal="true" aria-label="Receive purchase order">
+                        <div className="retail-modal-header">
+                            <h2 className="retail-panel-title">
+                                <span className="icon-tile"><Icon name="Truck" size={18} /></span>
+                                Receive · {text(receiving.order.reference) || 'Purchase order'}
+                            </h2>
+                            <button type="button" className="modal-close" onClick={() => setReceiving(null)} aria-label="Close receiving"><Icon name="X" size={18} /></button>
+                        </div>
+                        <div className="retail-modal-body">
                             <div className="re-table-wrap">
                                 <table className="re-table">
                                     <thead>
                                         <tr>
-                                            <th><span className="table-col"><TableIcon label="Reference" /><span>Reference</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Supplier" /><span>Supplier</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Total" /><span>Total</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Date" /><span>Date</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Action" /><span>Action</span></span></th>
+                                            <th><span className="table-col"><TableIcon label="Item" /><span>Item</span></span></th>
+                                            <th><span className="table-col"><TableIcon label="Ordered" /><span>Ordered</span></span></th>
+                                            <th><span className="table-col"><TableIcon label="Quantity" /><span>Receive qty</span></span></th>
+                                            <th><span className="table-col"><TableIcon label="Batch" /><span>Batch</span></span></th>
+                                            <th><span className="table-col"><TableIcon label="Expiry" /><span>Expiry</span></span></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {orders.map((order) => {
-                                            const status = text(order.status);
-                                            const id = text(order.id);
+                                        {receiving.lines.map((line, index) => {
+                                            const lineId = text(line.orderItemId ?? line.id);
+                                            const value = receiving.values[lineId] ?? { quantity: '', batchNumber: '', expiryDate: '' };
+                                            const update = (patch: Partial<ReceiveValue>) =>
+                                                setReceiving((current) => current ? {
+                                                    ...current,
+                                                    values: { ...current.values, [lineId]: { ...value, ...patch } },
+                                                } : current);
                                             return (
-                                                <tr key={id}>
-                                                    <td><div className="table-cell-content"><TableIcon label="Reference" value={order.reference} /><span className="min-w-0 font-mono text-xs font-semibold">{text(order.reference) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Supplier" value={order.supplierId} /><span className="min-w-0">{supplierName(text(order.supplierId))}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'OPEN'}</span></span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Total" value={order.total} /><span className="min-w-0 font-semibold">{money(order.total)}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Date" value={order.createdAt} /><span className="min-w-0">{text(order.createdAt).slice(0, 10) || '—'}</span></div></td>
+                                                <tr key={lineId || index}>
+                                                    <td><div className="table-cell-content"><TableIcon label="Item" value={line.productId} /><span className="min-w-0 font-semibold">{productName(text(line.productId))}<span className="block text-xs text-gray-400">{productSku(text(line.productId))}</span></span></div></td>
+                                                    <td><div className="table-cell-content"><TableIcon label="Ordered" value={line.quantity} /><span className="min-w-0">{text(line.quantity)}</span></div></td>
                                                     <td>
                                                         <div className="table-cell-content">
-                                                            <TableIcon label="Action" value={status} />
-                                                            <span className="min-w-0 flex flex-wrap gap-2">
-                                                                {status === 'OPEN' && (
-                                                                    <button type="button" className="btn-primary btn-xs" disabled={busy} onClick={() => void approve(order)}>Approve</button>
-                                                                )}
-                                                                {['APPROVED', 'PARTIALLY_RECEIVED'].includes(status) && (
-                                                                    <button type="button" className="btn-primary btn-xs" disabled={busy} onClick={() => void openReceive(order)}>Receive</button>
-                                                                )}
-                                                                {['OPEN', 'APPROVED', 'PARTIALLY_RECEIVED'].includes(status) && (
-                                                                    <button type="button" className="btn-outline btn-xs" disabled={busy} onClick={() => void cancel(order)}>Cancel</button>
-                                                                )}
-                                                                {['RECEIVED', 'CANCELLED'].includes(status) && (
-                                                                    <span className="text-xs text-gray-400">Closed</span>
-                                                                )}
-                                                            </span>
+                                                            <TableIcon label="Quantity" />
+                                                            <input className="form-input" type="number" min="0" value={value.quantity} onChange={(event) => update({ quantity: event.target.value })} aria-label={`Receive quantity for ${productName(text(line.productId))}`} style={{ width: 80 }} />
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="table-cell-content">
+                                                            <TableIcon label="Batch" />
+                                                            <input className="form-input" value={value.batchNumber} onChange={(event) => update({ batchNumber: event.target.value })} aria-label={`Batch for ${productName(text(line.productId))}`} placeholder="Batch no." />
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="table-cell-content">
+                                                            <TableIcon label="Expiry" />
+                                                            <input className="form-input" type="date" value={value.expiryDate} onChange={(event) => update({ expiryDate: event.target.value })} aria-label={`Expiry for ${productName(text(line.productId))}`} />
                                                         </div>
                                                     </td>
                                                 </tr>
                                             );
                                         })}
-                                        {orders.length === 0 && (
-                                            <TableEmptyState colSpan={6} icon="SealCheck" message="No purchase orders yet. Add a supplier and create the first order." />
+                                        {receiving.lines.length === 0 && (
+                                            <TableEmptyState colSpan={5} icon="ClipboardText" message="Order lines are not available for this order." />
                                         )}
                                     </tbody>
                                 </table>
                             </div>
-                        </FormCard>
-                    </div>
-                )}
-
-                {tab === 'suppliers' && (
-                    <div className="space-y-4">
-                        <FormCard title="Add a supplier" icon="Truck">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label className="block">
-                                    <span className="form-label">Code</span>
-                                    <input className="form-input w-full" value={supplierForm.code} onChange={(event) => setSupplierForm((current) => ({ ...current, code: event.target.value }))} placeholder="e.g. SUP-001" />
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Name</span>
-                                    <input className="form-input w-full" value={supplierForm.name} onChange={(event) => setSupplierForm((current) => ({ ...current, name: event.target.value }))} placeholder="Supplier name" />
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Status</span>
-                                    <select className="form-input w-full" value={supplierForm.status} onChange={(event) => setSupplierForm((current) => ({ ...current, status: event.target.value }))}>
-                                        <option value="ACTIVE">ACTIVE</option>
-                                        <option value="INACTIVE">INACTIVE</option>
-                                    </select>
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Phone</span>
-                                    <input className="form-input w-full" value={supplierForm.phone} onChange={(event) => setSupplierForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Optional" />
-                                </label>
-                                <label className="block sm:col-span-2">
-                                    <span className="form-label">Email</span>
-                                    <input className="form-input w-full" type="email" value={supplierForm.email} onChange={(event) => setSupplierForm((current) => ({ ...current, email: event.target.value }))} placeholder="Optional" />
-                                </label>
+                            <div className="retail-alert retail-alert-info mt-4">
+                                <Icon name="Info" size={16} />
+                                <span>Received quantities create FEFO batches and append stock movement entries.</span>
                             </div>
-                            <button type="button" className="btn-primary mt-4" disabled={busy} onClick={() => void createSupplier()}>
-                                <Icon name="Plus" size={16} className="mr-2" /> Add supplier
+                        </div>
+                        <div className="retail-modal-footer">
+                            <button type="button" className="btn-outline" onClick={() => setReceiving(null)}>Cancel</button>
+                            <button type="button" className="btn-primary" disabled={busy} onClick={() => void receive()}>
+                                <Icon name="Check" size={16} className="mr-2" /> Confirm receipt
                             </button>
-                        </FormCard>
-
-                        <FormCard title="Suppliers" icon="ListChecks">
-                            <div className="re-table-wrap">
-                                <table className="re-table">
-                                    <thead>
-                                        <tr>
-                                            <th><span className="table-col"><TableIcon label="Code" /><span>Code</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Supplier" /><span>Supplier</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Phone" /><span>Phone</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Email" /><span>Email</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {suppliers.map((row) => {
-                                            const status = text(row.status);
-                                            return (
-                                                <tr key={text(row.id)}>
-                                                    <td><div className="table-cell-content"><TableIcon label="Code" value={row.code} /><span className="min-w-0 font-mono text-xs font-semibold">{text(row.code) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Supplier" value={row.name} /><span className="min-w-0 font-semibold text-gray-900">{text(row.name) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Phone" value={row.phone} /><span className="min-w-0">{text(row.phone) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Email" value={row.email} /><span className="min-w-0">{text(row.email) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'ACTIVE'}</span></span></div></td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {suppliers.length === 0 && (
-                                            <TableEmptyState colSpan={5} icon="Truck" message="No suppliers registered yet." />
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </FormCard>
+                        </div>
                     </div>
-                )}
-
-                {tab === 'discounts' && (
-                    <div className="space-y-4">
-                        <FormCard title="Create a discount" icon="Tag">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label className="block">
-                                    <span className="form-label">Code</span>
-                                    <input className="form-input w-full" value={discountForm.code} onChange={(event) => setDiscountForm((current) => ({ ...current, code: event.target.value }))} placeholder="e.g. SCHOOL10" />
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Kind</span>
-                                    <select className="form-input w-full" value={discountForm.kind} onChange={(event) => setDiscountForm((current) => ({ ...current, kind: event.target.value }))}>
-                                        <option value="PERCENT">PERCENT</option>
-                                        <option value="FIXED">FIXED</option>
-                                    </select>
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Value</span>
-                                    <input className="form-input w-full" type="number" min="0" value={discountForm.value} onChange={(event) => setDiscountForm((current) => ({ ...current, value: event.target.value }))} placeholder={discountForm.kind === 'PERCENT' ? 'e.g. 10' : 'e.g. 500'} />
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Expires on</span>
-                                    <input className="form-input w-full" type="date" value={discountForm.expiresAt} onChange={(event) => setDiscountForm((current) => ({ ...current, expiresAt: event.target.value }))} />
-                                </label>
-                                <label className="block">
-                                    <span className="form-label">Status</span>
-                                    <select className="form-input w-full" value={discountForm.status} onChange={(event) => setDiscountForm((current) => ({ ...current, status: event.target.value }))}>
-                                        <option value="ACTIVE">ACTIVE</option>
-                                        <option value="INACTIVE">INACTIVE</option>
-                                    </select>
-                                </label>
-                            </div>
-                            <button type="button" className="btn-primary mt-4" disabled={busy} onClick={() => void createDiscount()}>
-                                <Icon name="Plus" size={16} className="mr-2" /> Create discount
-                            </button>
-                        </FormCard>
-
-                        <FormCard title="Discount codes" icon="ListChecks">
-                            <div className="re-table-wrap">
-                                <table className="re-table">
-                                    <thead>
-                                        <tr>
-                                            <th><span className="table-col"><TableIcon label="Code" /><span>Code</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Kind" /><span>Kind</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Value" /><span>Value</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Expires" /><span>Expires</span></span></th>
-                                            <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {discounts.map((row) => {
-                                            const status = text(row.status);
-                                            return (
-                                                <tr key={text(row.id)}>
-                                                    <td><div className="table-cell-content"><TableIcon label="Code" value={row.code} /><span className="min-w-0 font-mono text-xs font-semibold">{text(row.code) || '—'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Kind" value={row.kind} /><span className="min-w-0">{text(row.kind)}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Value" value={row.value} /><span className="min-w-0 font-semibold">{text(row.kind) === 'PERCENT' ? `${text(row.value)}%` : money(row.value)}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Expires" value={row.expiresAt} /><span className="min-w-0">{text(row.expiresAt).slice(0, 10) || 'No expiry'}</span></div></td>
-                                                    <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'ACTIVE'}</span></span></div></td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {discounts.length === 0 && (
-                                            <TableEmptyState colSpan={5} icon="Tag" message="No discount codes configured yet." />
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </FormCard>
-                    </div>
-                )}
-            </div>
+                </div>
+            )}
         </Layout>
     );
 }
