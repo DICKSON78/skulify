@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
 import TableEmptyState from '../components/TableEmptyState';
 import TableIcon from '../components/TableIcon';
-import { Notice, StatTile, money, text } from '../components/ModuleUi';
+import { Notice, money, text } from '../components/ModuleUi';
 import {
     api,
     newIdempotencyKey,
@@ -87,7 +87,6 @@ export default function RetailStorePos() {
     const [deviceKey, setDeviceKey] = useState('SKULIFY-DEMO-SENSOR-KEY');
     const [notes, setNotes] = useState('');
     const [receipt, setReceipt] = useState<Row | null>(null);
-    const [sales, setSales] = useState<Row[]>([]);
     const [returnSale, setReturnSale] = useState<Row | null>(null);
     const [returnLines, setReturnLines] = useState<Row[]>([]);
     const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
@@ -106,12 +105,6 @@ export default function RetailStorePos() {
         checkoutNonce.current = null;
         checkoutTimestamp.current = null;
     };
-
-    const refreshSales = useCallback(() => {
-        retailApi.sales<Row[]>(undefined, 25)
-            .then((rows) => setSales(asRows(rows)))
-            .catch(() => setSales([]));
-    }, []);
 
     const load = useCallback(() => {
         api.list<Row>('store-items', 0, 200, '')
@@ -140,8 +133,7 @@ export default function RetailStorePos() {
                     setTerminalCode((current) => current || text(asRows(rows)[0]?.code));
                 })
                 .catch(() => undefined));
-        refreshSales();
-    }, [refreshSales]);
+    }, []);
 
     useEffect(() => {
         load();
@@ -260,7 +252,6 @@ export default function RetailStorePos() {
             setDiscountCode('');
             setNotes('');
             setPriceChanged(false);
-            refreshSales();
             load();
         } catch (reason) {
             const failure = reason as ApiError;
@@ -345,7 +336,6 @@ export default function RetailStorePos() {
             setReturnSale(null);
             setReturnLines([]);
             setReturnReason('');
-            refreshSales();
             load();
             openReceipt({ id });
         } catch (reason) {
@@ -370,20 +360,12 @@ export default function RetailStorePos() {
         .slice(0, 6);
     const previewLines = asRows(preview?.lines);
     const receiptLines = asRows(receipt?.items ?? receipt?.lines ?? receipt?.saleItems);
-    const lowStock = items.filter((row) => num(row.stockQuantity) <= num(row.reorderLevel)).length;
     const previewTotal = preview ? num(preview.total) : 0;
     const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
     const selectedCard = cards.find((row) => text(row.id) === cardId);
     const selectedStudent = students.find((row) => text(row.id) === text(selectedCard?.studentId)
         || text(row.id) === studentId);
     const canCheckout = Boolean(cart.length && studentId && cardUid && terminalCode);
-
-    const flowSteps = [
-        { label: 'Tap card', icon: 'CreditCard', active: Boolean(cardUid && studentId) },
-        { label: 'Build basket', icon: 'Basket', active: cartCount > 0 },
-        { label: 'Settle', icon: 'CashRegister', active: false },
-        { label: 'Receipt', icon: 'Receipt', active: Boolean(receipt) },
-    ];
 
     return (
         <Layout>
@@ -395,24 +377,6 @@ export default function RetailStorePos() {
                     badge={<span className="badge badge-primary">{cartCount} in basket</span>}
                 />
                 <Notice error={error} success={success} />
-
-                <div className="retail-flow-steps" aria-label="Checkout progress">
-                    {flowSteps.map((step, index) => (
-                        <span key={step.label} className="flex items-center gap-2">
-                            <span className={`retail-flow-step ${step.active ? 'retail-flow-step-active' : ''}`}>
-                                <Icon name={step.icon} size={14} /> {step.label}
-                            </span>
-                            {index < flowSteps.length - 1 && <Icon name="CaretRight" size={12} />}
-                        </span>
-                    ))}
-                </div>
-
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatTile label="Products" value={items.length} icon="Basket" tone="primary" footer="Available in the store" />
-                    <StatTile label="Low stock" value={lowStock} icon="Warning" tone="warning" footer="Items needing restock" />
-                    <StatTile label="Active terminals" value={terminals.filter((row) => text(row.status) === 'ACTIVE').length} icon="Desktop" tone="info" footer="Ready for checkout" />
-                    <StatTile label="Basket total" value={money(previewTotal)} icon="Coins" tone="success" footer={previewLoading ? 'Pricing on the server...' : 'Server-priced total'} />
-                </div>
 
                 <div className="retail-workbench">
                     <section className="retail-panel" aria-label="Product browser">
@@ -684,62 +648,6 @@ export default function RetailStorePos() {
                         </div>
                     </section>
                 </div>
-
-                <section className="retail-panel" aria-label="Recent sales">
-                    <div className="retail-panel-header">
-                        <h2 className="retail-panel-title">
-                            <span className="icon-tile"><Icon name="Receipt" size={18} /></span>
-                            Recent sales
-                        </h2>
-                        <button type="button" className="btn-outline btn-xs" onClick={() => { setSuccess(''); refreshSales(); }}>
-                            <Icon name="ArrowClockwise" size={14} className="mr-1" /> Refresh
-                        </button>
-                    </div>
-                    <div className="p-4">
-                        <div className="re-table-wrap">
-                            <table className="re-table">
-                                <thead>
-                                    <tr>
-                                        <th><span className="table-col"><TableIcon label="Receipt" /><span>Receipt</span></span></th>
-                                        <th><span className="table-col"><TableIcon label="Student" /><span>Student</span></span></th>
-                                        <th><span className="table-col"><TableIcon label="Total" /><span>Total</span></span></th>
-                                        <th><span className="table-col"><TableIcon label="Status" /><span>Status</span></span></th>
-                                        <th><span className="table-col"><TableIcon label="Date" /><span>Date</span></span></th>
-                                        <th><span className="table-col"><TableIcon label="Action" /><span>Action</span></span></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sales.map((sale) => {
-                                        const status = text(sale.status);
-                                        return (
-                                            <tr key={text(sale.id)}>
-                                                <td><div className="table-cell-content"><TableIcon label="Receipt" value={sale.receiptNo ?? sale.reference} /><span className="min-w-0 font-mono text-xs">{text(sale.receiptNo ?? sale.reference) || '—'}</span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Student" value={sale.studentId} /><span className="min-w-0">{studentName(students.find((row) => text(row.id) === text(sale.studentId)))}</span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Total" value={sale.total} /><span className="min-w-0 font-semibold">{money(sale.total ?? sale.amount)}</span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Status" value={status} /><span className="min-w-0"><span className={`badge ${statusTone(status)}`}>{status || 'COMPLETED'}</span></span></div></td>
-                                                <td><div className="table-cell-content"><TableIcon label="Date" value={sale.createdAt} /><span className="min-w-0">{text(sale.createdAt).slice(0, 16).replace('T', ' ') || '—'}</span></div></td>
-                                                <td>
-                                                    <div className="table-cell-content">
-                                                        <TableIcon label="Action" value={status} />
-                                                        <span className="min-w-0 flex flex-wrap gap-2">
-                                                            <button type="button" className="btn-outline btn-xs" onClick={() => openReceipt(sale)}>Receipt</button>
-                                                            {!['CANCELLED', 'REFUNDED', 'RETURNED'].includes(status) && (
-                                                                <button type="button" className="btn-outline btn-xs" onClick={() => openReturn(sale)}>Return</button>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    {sales.length === 0 && (
-                                        <TableEmptyState colSpan={6} icon="Receipt" message="No sales recorded yet. Checkout a basket to see it here." />
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
             </div>
 
             {receipt && (
@@ -788,6 +696,18 @@ export default function RetailStorePos() {
                         </div>
                         <div className="retail-modal-footer">
                             <button type="button" className="btn-outline" onClick={closeReceipt}>Close</button>
+                            <button
+                                type="button"
+                                className="btn-outline"
+                                disabled={!text(receipt.id) || ['CANCELLED', 'REFUNDED', 'RETURNED'].includes(text(receipt.status))}
+                                onClick={() => {
+                                    const sale = receipt;
+                                    setReceipt(null);
+                                    openReturn(sale);
+                                }}
+                            >
+                                <Icon name="ArrowCounterClockwise" size={16} className="mr-2" /> Return items
+                            </button>
                             <button
                                 type="button"
                                 className="btn-primary"
