@@ -279,7 +279,7 @@ docker compose exec -T postgres psql -U school_wallet -d school_wallet \
   -c "select version, description, success from flyway_schema_history order by installed_rank;"
 ```
 
-Expected migrations: `1 foundation`, `1.1 school core`, `2 school workflows`, `3 operations`, `4 academic automation`, `5 parent portal testing`, all successful. `BOOTSTRAP_ENABLED=false` should leave `app_users` at zero. The schema contains 54 public tables, including `online_tests`, `test_attempts`, and `parent_letters`.
+Expected migrations: `1 foundation`, `1.1 school core`, `2 school workflows`, `3 operations`, `4 academic automation`, `5 parent portal testing`, `6 student location and rebrand`, `7 roles positions documents`, `8 cash withdrawal requests`, `9 pocket money init`, `10 student prefect roles`, `11 term attendance weeks`, `12 pocket money card labels`, all successful. For a production-style check, `BOOTSTRAP_ENABLED=false` leaves `app_users` at zero; the local always-on stack seeds 12 demo users instead.
 
 ### Reconcile a card
 

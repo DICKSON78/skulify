@@ -4,6 +4,7 @@
 build
 BOOT-INF
 backups
+uploads
 **/node_modules
 **/dist
 **/.vite

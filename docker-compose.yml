@@ -1,48 +1,61 @@
+# Local always-on Skulify stack.
+# Data survives container rebuilds and Docker daemon restarts via named volumes.
+# Override secrets with a .env file next to this file before exposing it outside localhost.
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: school-wallet-postgres
+    container_name: skulify-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: school_wallet
-      POSTGRES_USER: school_wallet
+      POSTGRES_DB: ${DB_NAME:-school_wallet}
+      POSTGRES_USER: ${DB_USER:-school_wallet}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-school_wallet}
-    ports:
-      - "5432:5432"
+    # No host port is published: the app reaches Postgres over the Compose network.
+    # Use `docker compose exec postgres psql -U school_wallet -d school_wallet` for SQL access.
     volumes:
-      - school-wallet-pgdata:/var/lib/postgresql/data
+      - skulify-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U school_wallet -d school_wallet"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-school_wallet} -d ${DB_NAME:-school_wallet}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 10s
 
   app:
     build: .
-    container_name: school-wallet-app
+    image: skulify:local
+    container_name: skulify-app
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://postgres:5432/school_wallet
-      DB_USER: school_wallet
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-school_wallet}
+      DB_USER: ${DB_USER:-school_wallet}
       DB_PASSWORD: ${DB_PASSWORD:-school_wallet}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in your environment}
+      # Local-only defaults. Set JWT_SECRET in .env for anything beyond localhost.
+      JWT_SECRET: ${JWT_SECRET:-local-only-skulify-secret-change-me-32-bytes-minimum}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8085}
-      BOOTSTRAP_ENABLED: ${BOOTSTRAP_ENABLED:-false}
+      APP_DOCUMENTS_DIR: /app/uploads/documents
+      # Local stack starts with the Skulify demo dataset. Seeding is idempotent.
+      BOOTSTRAP_ENABLED: ${BOOTSTRAP_ENABLED:-true}
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-superadmin}
       SUPER_ADMIN_PHONE: ${SUPER_ADMIN_PHONE:-+255700000000}
-      SUPER_ADMIN_FULL_NAME: ${SUPER_ADMIN_FULL_NAME:-KADE Super Admin}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_FULL_NAME: ${SUPER_ADMIN_FULL_NAME:-Skulify Super Admin}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-LocalAdmin123!}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     ports:
       - "8085:8085"
+    volumes:
+      - skulify-documents:/app/uploads/documents
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q UP || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 40s
+      retries: 30
+      start_period: 60s
 
 volumes:
-  school-wallet-pgdata:
+  skulify-pgdata:
+  skulify-documents:

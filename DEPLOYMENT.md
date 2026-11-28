@@ -12,6 +12,30 @@ For module-level flows, roles, API actions, and runbooks, see [MODULES.md](MODUL
 
 Keep configuration only in `src/main/resources/`. **Do not create an `application.yml` in the repository root**: Spring Boot loads external config after classpath config, so a root `application.yml` would silently override `application-prod.yml` and make production fall back to H2 + `create-drop`. The root file was removed and `/application.yml` is git-ignored to prevent regressions.
 
+## Local always-on stack
+
+For a persistent local install, the Compose file starts PostgreSQL and Skulify with `restart: unless-stopped`. Database rows and uploaded documents live in named volumes, so `docker compose down` followed by `docker compose up -d` keeps all data.
+
+```bash
+cd /path/to/school_wallet
+docker compose up -d --build
+curl -fsS http://localhost:8085/actuator/health
+```
+
+Open <http://localhost:8085>. The first start seeds the Skulify demo accounts (for example `admin / Admin123!`, `teacher / Teacher123!`, `parent / Parent123!`, `student / Student123!`) and the Pocket Money demo card/terminal. Seeding is idempotent and does not overwrite later edits or balances.
+
+Optional overrides can be placed in `.env` (copy `.env.example`). The built-in defaults are intended for localhost only; set `JWT_SECRET`, `DB_PASSWORD`, and `SUPER_ADMIN_PASSWORD` to real values before exposing port 8085 outside your machine.
+
+- App: `http://localhost:8085`
+- PostgreSQL: internal only; use `docker compose exec postgres psql -U school_wallet -d school_wallet`
+- Data: `skulify-pgdata` volume (database) and `skulify-documents` volume (`/app/uploads/documents`)
+- Logs: `docker compose logs -f app`
+- Stop without deleting data: `docker compose stop`
+- Start again: `docker compose start`
+- Complete removal including data: `docker compose down -v` (destructive)
+
+Compose restarts containers automatically when Docker starts. On a Linux host, also enable Docker itself at boot with `sudo systemctl enable --now docker`. On Docker Desktop, enable “Start Docker Desktop when you sign in”.
+
 ## Production with Docker Compose
 
 Create a `.env` file next to `docker-compose.yml`:

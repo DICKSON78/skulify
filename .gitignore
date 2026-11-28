@@ -1,4 +1,5 @@
 HELP.md
+/.env
 # Never keep an external root config: it overrides classpath application-{profile}.yml
 /application.yml
 .gradle
