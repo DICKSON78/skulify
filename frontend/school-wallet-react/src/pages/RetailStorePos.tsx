@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../components/Icon';
 import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
@@ -81,6 +82,7 @@ const extractPreview = (details: unknown): Row | null => {
 };
 
 export default function RetailStorePos() {
+    const navigate = useNavigate();
     const [items, setItems] = useState<Row[]>([]);
     const [cards, setCards] = useState<Row[]>([]);
     const [students, setStudents] = useState<Row[]>([]);
@@ -105,6 +107,7 @@ export default function RetailStorePos() {
     const [returnDispositions, setReturnDispositions] = useState<Record<string, string>>({});
     const [returnReason, setReturnReason] = useState('');
     const [error, setError] = useState('');
+    const [checkoutAlert, setCheckoutAlert] = useState('');
     const [success, setSuccess] = useState('');
     const [busy, setBusy] = useState(false);
     const checkoutKey = useRef<string | null>(null);
@@ -228,6 +231,10 @@ export default function RetailStorePos() {
         setReceipt(null);
     };
 
+    const closeCheckoutAlert = () => {
+        setCheckoutAlert('');
+    };
+
     const checkout = async () => {
         if (!cart.length || !studentId || !cardUid || !terminalCode) {
             setError('Choose a student card, a terminal and at least one item before checkout.');
@@ -276,7 +283,15 @@ export default function RetailStorePos() {
             load();
         } catch (reason) {
             const failure = reason as ApiError;
-            if (failure.code === 'PRICE_CHANGED' || message(reason).includes('PRICE_CHANGED')) {
+            const detail = message(reason);
+            const insufficientBalance = failure.code === 'INSUFFICIENT_FUNDS'
+                || failure.code === 'INSUFFICIENT_BALANCE'
+                || detail.includes('Wallet does not have enough balance')
+                || detail.toLowerCase().includes('insufficient pocket money balance');
+            if (insufficientBalance) {
+                setCheckoutAlert(detail || 'Wallet does not have enough balance for this movement');
+                setError('');
+            } else if (failure.code === 'PRICE_CHANGED' || detail.includes('PRICE_CHANGED')) {
                 const fresh = extractPreview(failure.details);
                 if (fresh) {
                     setPreview(fresh);
@@ -285,7 +300,7 @@ export default function RetailStorePos() {
                 resetCheckoutIdentity();
                 setError('Prices changed. Review the updated total, then confirm again.');
             } else {
-                setError(message(reason));
+                setError(detail);
             }
         } finally {
             setBusy(false);
@@ -670,6 +685,42 @@ export default function RetailStorePos() {
                     </section>
                 </div>
             </div>
+
+            {checkoutAlert && (
+                <div
+                    className="modal-backdrop checkout-alert-backdrop"
+                    role="presentation"
+                    onClick={(event) => { if (event.target === event.currentTarget) closeCheckoutAlert(); }}
+                >
+                    <div
+                        className="modal-card checkout-alert-modal"
+                        role="alertdialog"
+                        aria-modal="true"
+                        aria-labelledby="checkout-alert-title"
+                        aria-describedby="checkout-alert-body"
+                    >
+                        <div className="checkout-alert-icon"><Icon name="WarningCircle" size={26} /></div>
+                        <h2 id="checkout-alert-title">Not enough Pocket Money</h2>
+                        <p id="checkout-alert-body">{checkoutAlert}</p>
+                        <div className="checkout-alert-note">
+                            Top up the student wallet, then try this checkout again. Your basket is still here.
+                        </div>
+                        <div className="checkout-alert-actions">
+                            <button type="button" className="btn-outline" onClick={closeCheckoutAlert}>Close</button>
+                            <button
+                                type="button"
+                                className="btn-primary"
+                                onClick={() => {
+                                    closeCheckoutAlert();
+                                    navigate('/pocket-money');
+                                }}
+                            >
+                                <Icon name="Wallet" size={16} className="mr-2" /> Open Pocket Money
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {receipt && (
                 <div className="modal-backdrop receipt-modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeReceipt(); }}>
