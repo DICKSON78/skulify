@@ -112,7 +112,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logout, can } = useAuth();
+    const { user, logout, can, hasRole, schools, selectedSchoolId, selectSchool } = useAuth();
 
     const initials = (user?.fullName ?? 'SK')
         .split(/\s+/)
@@ -270,6 +270,21 @@ export default function Layout({ children }: { children: ReactNode }) {
                         <span>Settings</span>
                     </Link>
                 )}
+                {hasRole('SUPER_ADMIN') && (
+                    <label className="sidebar-school-switcher md:hidden" title="Active school">
+                        <Icon name="Buildings" size={16} />
+                        <select
+                            aria-label="Active school (mobile)"
+                            value={selectedSchoolId ?? ''}
+                            onChange={(event) => selectSchool(event.target.value)}
+                        >
+                            {schools.length === 0 && <option value="">No school</option>}
+                            {schools.map((school) => (
+                                <option key={school.id} value={school.id}>{school.name}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
                 <div className="my-2 border-t border-white/10"></div>
                 <div className="sidebar-user">
                     <span className="sidebar-avatar">{initials}</span>
@@ -340,6 +355,21 @@ export default function Layout({ children }: { children: ReactNode }) {
                     </div>
 
                     <div className="topbar-right">
+                        {hasRole('SUPER_ADMIN') && (
+                            <label className="school-switcher hidden sm:inline-flex" title="Active school">
+                                <Icon name="Buildings" size={16} />
+                                <select
+                                    aria-label="Active school"
+                                    value={selectedSchoolId ?? ''}
+                                    onChange={(event) => selectSchool(event.target.value)}
+                                >
+                                    {schools.length === 0 && <option value="">No school</option>}
+                                    {schools.map((school) => (
+                                        <option key={school.id} value={school.id}>{school.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
                         <span className="topbar-quick hidden sm:inline-flex">
                             <Icon name="Lightning" size={16} />
                             Quick Action

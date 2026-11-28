@@ -7,12 +7,22 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import { authApi, tokenStore, type AuthUser, type LoginResult } from '../lib/api';
+import {
+    authApi,
+    schoolStore,
+    tokenStore,
+    type AuthUser,
+    type LoginResult,
+    type SchoolOption,
+} from '../lib/api';
 import { canAccess } from './permissions';
 
 type AuthContextValue = {
     user: AuthUser | null;
     loading: boolean;
+    schools: SchoolOption[];
+    selectedSchoolId: string | null;
+    selectSchool: (schoolId: string) => void;
     login: (identifier: string, password: string) => Promise<LoginResult>;
     completeMfa: (token: string, code: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -25,22 +35,57 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
+    const [schools, setSchools] = useState<SchoolOption[]>([]);
+    const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(() => schoolStore.selected());
+
+    const clearSchoolContext = useCallback(() => {
+        schoolStore.clear();
+        setSchools([]);
+        setSelectedSchoolId(null);
+    }, []);
+
+    const loadSchoolContext = useCallback(async () => {
+        try {
+            const options = await authApi.schools();
+            setSchools(options);
+            const stored = schoolStore.selected();
+            const selected = options.some((school) => school.id === stored)
+                ? stored
+                : options[0]?.id ?? null;
+            if (selected) {
+                schoolStore.save(selected);
+            } else {
+                schoolStore.clear();
+            }
+            setSelectedSchoolId(selected);
+        } catch {
+            clearSchoolContext();
+        }
+    }, [clearSchoolContext]);
 
     const loadMe = useCallback(async () => {
         if (!tokenStore.access()) {
             setUser(null);
+            clearSchoolContext();
             setLoading(false);
             return;
         }
         try {
-            setUser(await authApi.me());
+            const loaded = await authApi.me();
+            setUser(loaded);
+            if (loaded.roles.includes('SUPER_ADMIN')) {
+                await loadSchoolContext();
+            } else {
+                clearSchoolContext();
+            }
         } catch {
             tokenStore.clear();
             setUser(null);
+            clearSchoolContext();
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [clearSchoolContext, loadSchoolContext]);
 
     useEffect(() => {
         void loadMe();
@@ -69,19 +114,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = useCallback(async () => {
         await authApi.logout();
         setUser(null);
+        clearSchoolContext();
+    }, [clearSchoolContext]);
+
+    const selectSchool = useCallback((schoolId: string) => {
+        schoolStore.save(schoolId);
+        setSelectedSchoolId(schoolId);
     }, []);
 
     const value = useMemo<AuthContextValue>(
         () => ({
             user,
             loading,
+            schools,
+            selectedSchoolId,
+            selectSchool,
             login,
             completeMfa,
             logout,
             hasRole: (role) => Boolean(user?.roles.includes(role)),
             can: (path) => canAccess(path, user?.roles ?? []),
         }),
-        [user, loading, login, completeMfa, logout],
+        [user, loading, schools, selectedSchoolId, selectSchool, login, completeMfa, logout],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -312,7 +312,8 @@ Migration `V13__retail_engine.sql` adds retail suppliers, batches, stock movemen
 
 ### Key flows
 
-- **Preview/sale**: `POST /api/v1/retail/preview` prices items server-side and returns a pricing fingerprint. `POST /api/v1/retail/sales` requires `Idempotency-Key`, verifies `PRICE_CHANGED` against the fingerprint, consumes FEFO batches (`quantity_remaining > 0`, not expired, tenant-scoped), updates `store_items.stock_quantity` in the same transaction, and debits Pocket Money through `PocketMoneyPurchaseService` (`retail-sale-<idempotencyKey>`).
+- **Preview/sale**: `POST /api/v1/retail/sales/preview` prices items server-side and returns a pricing fingerprint. `POST /api/v1/retail/sales` requires `Idempotency-Key`, verifies `PRICE_CHANGED` against the fingerprint, consumes FEFO batches (`quantity_remaining > 0`, not expired, tenant-scoped), updates `store_items.stock_quantity` in the same transaction, and debits Pocket Money through `PocketMoneyPurchaseService` (`retail-sale-<idempotencyKey>`).
+- **School context**: school users are scoped to their own tenant. `SUPER_ADMIN` picks an active school in the top bar; the SPA sends it as `X-Tenant-Id` on every API request, and retail/Pocket Money services reject the reserved system tenant until a school is selected. `GET /api/v1/schools` lists the selectable schools for platform administrators.
 - **Idempotency**: sale/return/stock/PO write endpoints require idempotency keys; same key with different request hash returns conflict; replay returns the existing result without double debit or double stock mutation.
 - **Returns/refunds**: `POST /api/v1/retail/sales/{id}/return` validates refund window/amount (`<= original sale total`), restocks original batches or writes off, records append-only refund, and credits wallet through `WalletService.refund` (balanced REFUND ledger postings: `CREDIT wallet REFUND / DEBIT SHOP_SETTLEMENT REFUND`).
 - **Stock/PO**: restock/adjust create batches and append-only stock movements; purchase orders support create/approve/receive/cancel, and receiving creates batches + RESTOCK movements.
@@ -343,11 +344,12 @@ Migration `V13__retail_engine.sql` adds retail suppliers, batches, stock movemen
 | `POST` | `/api/v1/retail/purchase-orders/{id}/receive` | Receive PO into batches/stock |
 | `POST` | `/api/v1/retail/purchase-orders/{id}/cancel` | Cancel PO |
 | `GET` | `/api/v1/retail/terminals` | Retail/POS terminals |
+| `GET` | `/api/v1/schools` | Active schools for `SUPER_ADMIN` school switcher |
 
 ### Verification performed
 
-- `SPRING_DEVTOOLS_RESTART_ENABLED=false ./gradlew test --no-daemon` — 71 tests, 0 failures (13 retail integration tests cover FEFO, refunds, reconciliation, idempotent replay, concurrent replay, and refund-window/tenant guards).
+- `SPRING_DEVTOOLS_RESTART_ENABLED=false ./gradlew test --no-daemon` — 76 tests, 0 failures (15 retail integration tests cover FEFO, refunds, reconciliation, idempotent replay, concurrent replay, refund-window/tenant guards, and superadmin school context).
 - `npm --prefix frontend/school-wallet-react run build` — passed; hashed assets synced to `src/main/resources/static/`.
 - Docker local stack — `skulify-app` and `skulify-postgres` healthy, Flyway history through `V13`, no host Postgres port.
 - API smoke — sale/replay/receipt/return/reconciliation/wallet ledger verified; replay returns the stored response without a second debit.
-- Playwright UI check — all six Store & Inventory routes return `200`, no console/page errors, no visible UUIDs, sidebar contains exactly the six expected labels, PWA remains `skulify-v17`, and `/api/`/`/actuator/` bypass the service worker.
+- Playwright UI check — all six Store & Inventory routes return `200`, no console/page errors, no visible UUIDs, sidebar contains exactly the six expected labels, PWA remains `skulify-v17`, and `/api/`/`/actuator/` bypass the service worker. A superadmin-specific check confirms the school switcher, `X-Tenant-Id` header, and successful POS preview.

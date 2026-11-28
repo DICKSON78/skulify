@@ -133,6 +133,32 @@ class RetailIntegrationTest {
     }
 
     @Test
+    void superAdminPreviewUsesSelectedSchoolContext() {
+        UUID productId = insertStoreItem("RET-SKU-SUPER-" + suffix(), "Admin notebook", 1200, 20, 5);
+        insertBatch(productId, "B-SUPER-" + suffix(), 10, LocalDate.now().plusDays(30));
+        authenticateSuperAdmin();
+        TenantContext.set(tenantId); // Simulates X-Tenant-Id from the school switcher.
+
+        PreviewResponse preview = retailService.preview(new PreviewRequest(
+                List.of(new PreviewItemRequest(productId, 2)), null));
+
+        assertEquals(2400L, preview.total());
+    }
+
+    @Test
+    void superAdminWithoutSchoolContextCannotPreview() {
+        UUID productId = insertStoreItem("RET-SKU-NOCTX-" + suffix(), "Unscoped item", 800, 20, 5);
+        authenticateSuperAdmin();
+        TenantContext.clear();
+
+        ApiException error = assertThrows(
+                ApiException.class,
+                () -> retailService.preview(new PreviewRequest(
+                        List.of(new PreviewItemRequest(productId, 1)), null)));
+        assertEquals("SCHOOL_CONTEXT_REQUIRED", error.getCode());
+    }
+
+    @Test
     void saleDebitsWalletConsumesFefoAndUpdatesReconciliation() {
         String sfx = suffix();
         UUID productId = insertStoreItem("RET-SKU-2-" + sfx, "Juice", 1500, 13, 2);
@@ -506,6 +532,14 @@ class RetailIntegrationTest {
         return new SaleRequest(studentId, cardUid, terminalCode, deviceKey,
                 List.of(new PreviewItemRequest(productId, quantity)), discountCode, null,
                 null, nonce, Instant.now());
+    }
+
+    private void authenticateSuperAdmin() {
+        AuthenticatedUser user = new AuthenticatedUser(
+                UUID.randomUUID(), TenantContext.SYSTEM_TENANT_ID, "superadmin", "Platform Admin",
+                Set.of(Role.SUPER_ADMIN), false);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, Set.of()));
     }
 
     private void authenticateCashier() {

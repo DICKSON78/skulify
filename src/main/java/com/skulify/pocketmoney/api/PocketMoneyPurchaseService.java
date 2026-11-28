@@ -31,6 +31,7 @@ import java.util.UUID;
 import org.example.school_wallet.academic.Student;
 import org.example.school_wallet.academic.StudentRepository;
 import org.example.school_wallet.common.error.Errors;
+import org.example.school_wallet.common.tenant.SchoolContext;
 import org.example.school_wallet.security.AuthenticatedUser;
 import org.example.school_wallet.security.CurrentUser;
 import org.example.school_wallet.security.ResourceAccessPolicy;
@@ -272,10 +273,7 @@ public class PocketMoneyPurchaseService {
     }
 
     private UUID tenant(AuthenticatedUser user) {
-        if (user.tenantId() == null) {
-            throw Errors.forbidden("FORBIDDEN", "A school context is required");
-        }
-        return user.tenantId();
+        return SchoolContext.require(user.tenantId(), user.isSuperAdmin());
     }
 
     private UUID studentTenant(Student student, AuthenticatedUser user) {

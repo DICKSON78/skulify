@@ -102,6 +102,7 @@ import java.util.stream.Collectors;
 import org.example.school_wallet.academic.Student;
 import org.example.school_wallet.academic.StudentRepository;
 import org.example.school_wallet.common.error.Errors;
+import org.example.school_wallet.common.tenant.SchoolContext;
 import org.example.school_wallet.operations.StoreItem;
 import org.example.school_wallet.security.AuthenticatedUser;
 import org.example.school_wallet.user.AppUserRepository;
@@ -1626,11 +1627,8 @@ public class RetailService {
     }
 
     private UUID tenantId() {
-        UUID tenant = currentUser().tenantId();
-        if (tenant == null) {
-            throw Errors.forbidden("SCHOOL_CONTEXT_REQUIRED", "Select a school to manage retail data");
-        }
-        return tenant;
+        AuthenticatedUser user = currentUser();
+        return SchoolContext.require(user.tenantId(), user.isSuperAdmin());
     }
 
     private AuthenticatedUser currentUser() {

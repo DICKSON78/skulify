@@ -15,6 +15,13 @@ export type AuthUser = {
     mustChangePassword: boolean;
 };
 
+export type SchoolOption = {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+};
+
 export type LoginResult = {
     accessToken: string | null;
     refreshToken: string | null;
@@ -27,6 +34,17 @@ export type LoginResult = {
 const BASE = '/api/v1';
 const ACCESS_KEY = 'school_wallet_access_token';
 const REFRESH_KEY = 'school_wallet_refresh_token';
+const TENANT_KEY = 'school_wallet_selected_tenant';
+
+export const schoolStore = {
+    selected: () => localStorage.getItem(TENANT_KEY),
+    save(tenantId: string) {
+        localStorage.setItem(TENANT_KEY, tenantId);
+    },
+    clear() {
+        localStorage.removeItem(TENANT_KEY);
+    },
+};
 
 export const tokenStore = {
     access: () => localStorage.getItem(ACCESS_KEY),
@@ -40,6 +58,7 @@ export const tokenStore = {
     clear() {
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
+        schoolStore.clear();
     },
 };
 
@@ -47,6 +66,11 @@ export type ApiError = Error & {
     code?: string;
     details?: unknown;
     status?: number;
+};
+
+const tenantHeader = (): Record<string, string> => {
+    const tenantId = schoolStore.selected();
+    return tenantId ? { 'X-Tenant-Id': tenantId } : {};
 };
 
 async function parseError(response: Response): Promise<ApiError> {
@@ -100,6 +124,7 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
     const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData;
     const headers: Record<string, string> = {
         ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+        ...tenantHeader(),
         ...(init?.headers as Record<string, string> | undefined),
     };
     const accessToken = tokenStore.access();
@@ -165,6 +190,7 @@ export const authApi = {
     },
 
     me: () => request<AuthUser>('/me'),
+    schools: () => request<SchoolOption[]>('/schools'),
     logout: async () => {
         const refreshToken = tokenStore.refresh();
         if (refreshToken) {
@@ -196,9 +222,11 @@ export const api = {
     recentStudents: <T>() => request<T[]>('/dashboard/recent-students'),
     downloadReport: async (id: string) => {
         const accessToken = tokenStore.access();
-        const response = await fetch(`${BASE}/reports/${id}/generate`, {
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-        });
+        const headers: Record<string, string> = {
+            ...tenantHeader(),
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        };
+        const response = await fetch(`${BASE}/reports/${id}/generate`, { headers });
         if (!response.ok) {
             throw await parseError(response);
         }
@@ -220,7 +248,10 @@ export const documentsApi = {
     download: async (id: string) => {
         const accessToken = tokenStore.access();
         const response = await fetch(`${BASE}/school-documents/${id}/download`, {
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            headers: {
+                ...tenantHeader(),
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
         });
         if (!response.ok) {
             throw await parseError(response);
@@ -414,7 +445,10 @@ export const retailApi = {
             `${BASE}/retail/sales/${encodeURIComponent(id)}/receipt/print`,
             {
                 cache: 'no-store',
-                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                headers: {
+                    ...tenantHeader(),
+                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                },
             },
         );
         if (!response.ok) {
@@ -565,7 +599,10 @@ export const academicsApi = {
         const query = new URLSearchParams({ classId, examType, term });
         const accessToken = tokenStore.access();
         const response = await fetch(`${BASE}/academics/marks/template?${query.toString()}`, {
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            headers: {
+                ...tenantHeader(),
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
         });
         if (!response.ok) {
             throw await parseError(response);

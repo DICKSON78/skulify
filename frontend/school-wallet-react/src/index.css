@@ -344,6 +344,43 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
+.school-switcher,
+.sidebar-school-switcher {
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-pill);
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.school-switcher select,
+.sidebar-school-switcher select {
+  min-width: 0;
+  max-width: 170px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.school-switcher select option,
+.sidebar-school-switcher select option { color: #0F172A; }
+
+.sidebar-school-switcher {
+  display: flex;
+  width: 100%;
+  border-radius: 10px;
+}
+
+.sidebar-school-switcher select { flex: 1; }
+
 .icon-circle {
   display: grid;
   place-items: center;
